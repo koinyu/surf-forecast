@@ -1,0 +1,1960 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🏄 Surf Forecast</title>
+  <style>
+    :root {
+      --deep: #050f1c;
+      --mid: #0a1e33;
+      --panel: #0e2540;
+      --card: rgba(255,255,255,0.05);
+      --card-hover: rgba(255,255,255,0.09);
+      --border: rgba(255,255,255,0.1);
+      --teal: #0ea5e9;
+      --teal-glow: rgba(14,165,233,0.2);
+      --green: #10b981;
+      --green-glow: rgba(16,185,129,0.2);
+      --yellow: #f59e0b;
+      --yellow-glow: rgba(245,158,11,0.2);
+      --red: #ef4444;
+      --red-glow: rgba(239,68,68,0.2);
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --light: #94a3b8;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: radial-gradient(ellipse at top, #0c2340 0%, var(--deep) 60%);
+      min-height: 100vh;
+      color: var(--text);
+      padding: 24px 16px 60px;
+    }
+
+    /* ── Header ─────────────────────────────────── */
+    header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    header .wave-icon { font-size: 3rem; line-height: 1; margin-bottom: 8px; }
+    header h1 { font-size: 2rem; font-weight: 800; letter-spacing: -0.5px; }
+    header h1 span { color: var(--teal); }
+    header p { color: var(--light); font-size: 0.95rem; margin-top: 6px; }
+
+    /* ── Container ───────────────────────────────── */
+    .container { max-width: 960px; margin: 0 auto; }
+
+    /* ── Favorites ────────────────────────────────── */
+    .fav-bar {
+      display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px;
+    }
+    .fav-chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: rgba(14,165,233,0.12); border: 1px solid rgba(14,165,233,0.25);
+      border-radius: 20px; padding: 5px 12px; font-size: 0.78rem;
+      color: var(--teal); cursor: pointer; transition: background 0.15s;
+    }
+    .fav-chip:hover { background: rgba(14,165,233,0.22); }
+    .fav-chip .fav-x {
+      margin-left: 2px; font-size: 0.68rem; opacity: 0.5; cursor: pointer;
+    }
+    .fav-chip .fav-x:hover { opacity: 1; color: var(--red); }
+    .btn-fav {
+      background: none; border: 1px solid var(--border); border-radius: 8px;
+      color: var(--muted); font-size: 0.78rem; padding: 4px 10px; cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .btn-fav:hover { color: var(--teal); border-color: var(--teal); }
+
+    /* ── Location Search ─────────────────────────── */
+    .search-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+
+    .search-label { font-size: 0.8rem; font-weight: 600; color: var(--light); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; }
+
+    .search-row { display: flex; gap: 10px; position: relative; }
+    .search-row input {
+      flex: 1;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 16px;
+      color: var(--text);
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .search-row input:focus {
+      border-color: var(--teal);
+      box-shadow: 0 0 0 3px var(--teal-glow);
+    }
+    .search-row input::placeholder { color: var(--muted); }
+
+    .btn {
+      background: var(--teal);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 12px 22px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s, opacity 0.2s;
+      white-space: nowrap;
+    }
+    .btn:hover { background: #0284c7; }
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.5; cursor: default; }
+
+    .autocomplete-list {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      right: 80px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      z-index: 100;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.5);
+      display: none;
+    }
+    .autocomplete-list.show { display: block; }
+    .autocomplete-item {
+      padding: 11px 16px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      border-bottom: 1px solid var(--border);
+      transition: background 0.15s;
+    }
+    .autocomplete-item:last-child { border-bottom: none; }
+    .autocomplete-item:hover { background: var(--card-hover); }
+    .autocomplete-item .loc-name { font-weight: 600; }
+    .autocomplete-item .loc-sub { color: var(--light); font-size: 0.8rem; }
+
+    .selected-location {
+      margin-top: 14px;
+      padding: 10px 14px;
+      background: var(--teal-glow);
+      border: 1px solid rgba(14,165,233,0.3);
+      border-radius: 8px;
+      font-size: 0.9rem;
+      display: none;
+      align-items: center;
+      gap: 8px;
+    }
+    .selected-location.show { display: flex; }
+    .selected-location .pin { font-size: 1.1rem; }
+
+    /* ── Settings Panel ──────────────────────────── */
+    .settings-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
+    .settings-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 24px;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.15s;
+    }
+    .settings-header:hover { background: var(--card-hover); }
+    .settings-title { font-size: 0.95rem; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+    .settings-title .icon { font-size: 1.1rem; }
+    .chevron { font-size: 0.8rem; color: var(--muted); transition: transform 0.25s; }
+    .chevron.open { transform: rotate(180deg); }
+
+    .settings-body {
+      padding: 0 24px;
+      display: none;
+    }
+    .settings-body.open {
+      display: block;
+      padding: 0 24px 24px;
+    }
+
+    .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 600px) { .settings-grid { grid-template-columns: 1fr; } }
+
+    .setting-item label { font-size: 0.78rem; font-weight: 600; color: var(--light); text-transform: uppercase; letter-spacing: 0.07em; display: block; margin-bottom: 8px; }
+    .setting-item .val { color: var(--teal); font-weight: 700; }
+
+    input[type=range] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 8px;
+      border-radius: 4px;
+      background: rgba(255,255,255,0.1);
+      outline: none;
+      margin: 6px 0;
+      padding: 0;
+      touch-action: none;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      background: var(--teal);
+      cursor: pointer;
+      box-shadow: 0 0 0 3px var(--teal-glow);
+    }
+    input[type=range]::-webkit-slider-runnable-track {
+      height: 8px;
+      border-radius: 4px;
+    }
+
+    select {
+      width: 100%;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: var(--text);
+      font-size: 0.9rem;
+      outline: none;
+      cursor: pointer;
+    }
+    select option { background: var(--panel); }
+
+    .divider { height: 1px; background: var(--border); margin: 20px 0; }
+
+    /* ── Fetch Button ────────────────────────────── */
+    .fetch-row { text-align: center; margin-bottom: 28px; }
+    .btn-fetch {
+      background: linear-gradient(135deg, #0ea5e9, #0284c7);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      padding: 14px 40px;
+      font-size: 1.05rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.2s;
+      box-shadow: 0 4px 20px rgba(14,165,233,0.35);
+      letter-spacing: 0.02em;
+    }
+    .btn-fetch:hover { transform: translateY(-2px); box-shadow: 0 6px 28px rgba(14,165,233,0.5); }
+    .btn-fetch:active { transform: scale(0.97); }
+    .btn-fetch:disabled { opacity: 0.5; cursor: default; transform: none; box-shadow: none; }
+
+    /* ── Loading ─────────────────────────────────── */
+    .loading {
+      text-align: center;
+      padding: 60px 0;
+      display: none;
+    }
+    .loading.show { display: block; }
+    .spinner {
+      width: 44px; height: 44px;
+      border: 3px solid var(--border);
+      border-top-color: var(--teal);
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+      margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading p { color: var(--light); }
+
+    /* ── Error ───────────────────────────────────── */
+    .error-box {
+      background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.3);
+      border-radius: 10px;
+      padding: 14px 18px;
+      color: #fca5a5;
+      margin-bottom: 20px;
+      display: none;
+    }
+    .error-box.show { display: block; }
+
+    /* ── Summary Bar ─────────────────────────────── */
+    .summary-bar {
+      display: none;
+      gap: 12px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+    .summary-bar.show { display: flex; }
+    .summary-chip {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 16px;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .summary-chip .num { font-size: 1.4rem; font-weight: 800; }
+    .summary-chip.good .num { color: var(--green); }
+    .summary-chip.ok .num { color: var(--yellow); }
+    .summary-chip.bad .num { color: var(--red); }
+    .summary-chip.loc { flex: 1; }
+
+    /* ── Forecast Grid ───────────────────────────── */
+    .forecast-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 14px;
+      margin-bottom: 28px;
+    }
+
+    .day-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      transition: transform 0.15s, box-shadow 0.2s;
+      cursor: default;
+      position: relative;
+      overflow: hidden;
+    }
+    .day-card:hover { transform: translateY(-2px); }
+
+    .day-card.great {
+      border-color: rgba(16,185,129,0.4);
+      box-shadow: 0 0 0 1px rgba(16,185,129,0.2), 0 4px 20px rgba(16,185,129,0.1);
+    }
+    .day-card.great::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--green), #34d399);
+    }
+    .day-card.decent {
+      border-color: rgba(245,158,11,0.4);
+      box-shadow: 0 0 0 1px rgba(245,158,11,0.2), 0 4px 20px rgba(245,158,11,0.08);
+    }
+    .day-card.decent::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--yellow), #fbbf24);
+    }
+    .day-card.poor {
+      border-color: rgba(239,68,68,0.25);
+    }
+    .day-card.poor::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--red), #f87171);
+    }
+
+    .day-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .day-date .weekday { font-weight: 800; font-size: 1rem; }
+    .day-date .date { font-size: 0.78rem; color: var(--light); margin-top: 1px; }
+    .day-badge {
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 20px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .badge-great { background: var(--green-glow); color: var(--green); border: 1px solid rgba(16,185,129,0.3); }
+    .badge-decent { background: var(--yellow-glow); color: var(--yellow); border: 1px solid rgba(245,158,11,0.3); }
+    .badge-poor { background: var(--red-glow); color: var(--red); border: 1px solid rgba(239,68,68,0.3); }
+
+    .day-stats { display: flex; flex-direction: column; gap: 9px; }
+    .stat-row { display: flex; align-items: center; justify-content: space-between; }
+    .stat-label { font-size: 0.78rem; color: var(--muted); display: flex; align-items: center; gap: 5px; }
+    .stat-label .icon { font-size: 0.9rem; }
+    .stat-value { font-size: 0.88rem; font-weight: 600; }
+
+    .score-bar {
+      margin-top: 14px;
+      height: 5px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .score-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.6s ease;
+    }
+    .great .score-fill { background: linear-gradient(90deg, var(--green), #34d399); }
+    .decent .score-fill { background: linear-gradient(90deg, var(--yellow), #fbbf24); }
+    .poor .score-fill { background: linear-gradient(90deg, #475569, #64748b); }
+
+    .best-window {
+      margin-top: 10px;
+      font-size: 0.73rem;
+      color: var(--light);
+      text-align: right;
+    }
+    .best-window span { color: var(--teal); font-weight: 600; }
+
+    .tide-debug-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      margin-bottom: 16px;
+      display: none;
+      overflow: hidden;
+    }
+    .tide-debug-card.show { display: block; }
+    .tide-debug-header {
+      padding: 14px 20px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      color: var(--light);
+      user-select: none;
+    }
+    .tide-debug-header:hover { background: var(--card-hover); }
+    .tide-debug-body {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease;
+      font-size: 0.78rem;
+      font-family: monospace;
+    }
+    .tide-debug-body.open { max-height: 600px; overflow-y: auto; }
+    .tide-debug-body table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .tide-debug-body th {
+      background: rgba(255,255,255,0.06);
+      padding: 6px 14px;
+      text-align: left;
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .tide-debug-body td {
+      padding: 5px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      color: var(--light);
+    }
+    .tide-debug-body td.match { color: var(--green); }
+    .tide-debug-body td.miss  { color: var(--red); }
+    .tide-debug-body td.range-ok  { color: var(--green); font-weight: 700; }
+    .tide-debug-body td.range-out { color: var(--red); }
+
+    .no-tide-box {
+      margin-top: 12px;
+      background: rgba(239,68,68,0.08);
+      border: 1px solid rgba(239,68,68,0.3);
+      border-radius: 8px;
+      padding: 9px 12px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--red);
+    }
+
+    .best-win-box {
+      margin-top: 12px;
+      background: rgba(14,165,233,0.07);
+      border: 1px solid rgba(14,165,233,0.2);
+      border-radius: 8px;
+      padding: 9px 12px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .best-win-box:hover { background: rgba(14,165,233,0.12); }
+    .best-win-title {
+      font-size: 0.75rem;
+      color: var(--light);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+    .best-win-title strong { color: var(--teal); }
+    .best-win-score {
+      background: rgba(14,165,233,0.15);
+      color: var(--teal);
+      font-size: 0.68rem;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 10px;
+      white-space: nowrap;
+    }
+    .best-win-chevron {
+      font-size: 0.65rem;
+      color: var(--muted);
+      transition: transform 0.2s;
+      flex-shrink: 0;
+    }
+    .best-win-box.open .best-win-chevron { transform: rotate(180deg); }
+    .best-win-stats {
+      display: flex;
+      gap: 10px;
+      margin-top: 6px;
+      font-size: 0.73rem;
+      color: var(--light);
+      flex-wrap: wrap;
+    }
+    /* Expandable hourly tide table */
+    .best-win-expand {
+      display: none;
+      margin-top: 8px;
+      border-top: 1px solid rgba(14,165,233,0.18);
+      padding-top: 8px;
+    }
+    .best-win-box.open .best-win-expand { display: block; }
+    .best-win-expand table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.71rem;
+    }
+    .best-win-expand th {
+      color: var(--muted);
+      font-weight: 600;
+      text-align: left;
+      padding: 2px 4px;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+    }
+    .best-win-expand td {
+      padding: 3px 4px;
+      color: var(--light);
+    }
+    .best-win-expand tr:not(:last-child) td {
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .tide-in  { color: var(--green); font-weight: 600; }
+    .tide-out { color: var(--red);   font-weight: 600; }
+
+    /* ── Email Section ───────────────────────────── */
+    .email-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      display: none;
+    }
+    .email-card.show { display: block; }
+    .email-card h3 { font-size: 1rem; font-weight: 700; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+    .email-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .email-row input {
+      flex: 1;
+      min-width: 200px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 11px 14px;
+      color: var(--text);
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .email-row input:focus { border-color: var(--teal); }
+    .btn-email {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 11px 22px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.1s, box-shadow 0.2s;
+      box-shadow: 0 4px 14px rgba(16,185,129,0.3);
+      white-space: nowrap;
+    }
+    .btn-email:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(16,185,129,0.45); }
+    .btn-email:disabled { opacity: 0.5; cursor: default; transform: none; }
+    .btn-copy {
+      background: rgba(255,255,255,0.07);
+      color: var(--light);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 11px 18px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-copy:hover { background: rgba(255,255,255,0.12); }
+
+    .email-note { margin-top: 10px; font-size: 0.78rem; color: var(--muted); }
+    .email-status { margin-top: 10px; font-size: 0.85rem; padding: 8px 12px; border-radius: 8px; display: none; }
+    .email-status.show { display: block; }
+    .email-status.success { background: var(--green-glow); color: var(--green); border: 1px solid rgba(16,185,129,0.3); }
+    .email-status.error { background: var(--red-glow); color: var(--red); border: 1px solid rgba(239,68,68,0.3); }
+    .email-status.info { background: var(--teal-glow); color: var(--teal); border: 1px solid rgba(14,165,233,0.3); }
+
+    /* ── Empty State ─────────────────────────────── */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--muted);
+    }
+    .empty-state .big { font-size: 3rem; margin-bottom: 12px; }
+    .empty-state p { font-size: 0.95rem; line-height: 1.6; }
+
+    /* ── Tooltip ─────────────────────────────────── */
+    .wind-dir { font-size: 0.85rem; }
+
+    .tide-section-title {
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: var(--light);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .tide-badge {
+      font-size: 0.68rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 20px;
+      background: rgba(100,116,139,0.2);
+      color: var(--muted);
+      border: 1px solid rgba(100,116,139,0.3);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .tide-badge.active {
+      background: rgba(14,165,233,0.15);
+      color: var(--teal);
+      border-color: rgba(14,165,233,0.35);
+    }
+
+    .tag-today {
+      background: rgba(14,165,233,0.15);
+      color: var(--teal);
+      border: 1px solid rgba(14,165,233,0.3);
+      font-size: 0.65rem;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- Header -->
+  <header>
+    <div class="wave-icon">🏄</div>
+    <h1>Surf <span>Forecast</span></h1>
+    <p>12-day wave & wind forecast — find your perfect surf day</p>
+  </header>
+
+  <!-- Location Search -->
+  <div class="search-card">
+    <div class="search-label">📍 Surf Location</div>
+    <div class="search-row">
+      <input type="text" id="locationInput" placeholder="Search a beach, city, or surf spot…" autocomplete="off" />
+      <button class="btn" id="searchBtn" onclick="doSearch()">Search</button>
+      <div class="autocomplete-list" id="autoList"></div>
+    </div>
+    <div class="selected-location" id="selectedLoc">
+      <span class="pin">📍</span>
+      <span id="selectedLocText">—</span>
+      <button class="btn-fav" id="saveFavBtn" onclick="saveFavorite()" style="margin-left:auto;" title="Save to favorites">⭐ Save</button>
+    </div>
+    <div class="fav-bar" id="favBar"></div>
+  </div>
+
+  <!-- Settings Panel -->
+  <div class="settings-card">
+    <div class="settings-header" onclick="toggleSettings()">
+      <div class="settings-title"><span class="icon">⚙️</span> Ideal Conditions</div>
+      <span class="chevron" id="chevron">▼</span>
+    </div>
+    <div class="settings-body" id="settingsBody">
+      <div class="settings-grid">
+
+        <div class="setting-item">
+          <label>Min Wave Height — <span class="val" id="minWaveVal">0.5 m</span></label>
+          <input type="range" id="minWave" min="0.2" max="3" step="0.1" value="0.5" oninput="updateSlider('minWave','minWaveVal','m');saveSettings()">
+        </div>
+
+        <div class="setting-item">
+          <label>Max Wave Height — <span class="val" id="maxWaveVal">2.0 m</span></label>
+          <input type="range" id="maxWave" min="0.5" max="6" step="0.1" value="2.0" oninput="updateSlider('maxWave','maxWaveVal','m');saveSettings()">
+        </div>
+
+        <div class="setting-item">
+          <label>Max Wind Speed — <span class="val" id="maxWindVal">15 kn</span></label>
+          <input type="range" id="maxWind" min="5" max="40" step="1" value="15" oninput="updateSlider('maxWind','maxWindVal','kn');saveSettings()">
+        </div>
+
+        <div class="setting-item">
+          <label>Min Swell Period — <span class="val" id="minPeriodVal">8 s</span></label>
+          <input type="range" id="minPeriod" min="3" max="20" step="1" value="8" oninput="updateSlider('minPeriod','minPeriodVal','s');saveSettings()">
+        </div>
+
+        <div class="setting-item">
+          <label>Beach Faces (orientation)</label>
+          <select id="beachFacing" onchange="saveSettings()">
+            <option value="any">Any / I don't know</option>
+            <option value="0">North (N) — beach faces North</option>
+            <option value="45">North-East (NE)</option>
+            <option value="90">East (E) — beach faces East</option>
+            <option value="135">South-East (SE)</option>
+            <option value="180">South (S) — beach faces South</option>
+            <option value="225">South-West (SW)</option>
+            <option value="270">West (W) — beach faces West</option>
+            <option value="315">North-West (NW)</option>
+          </select>
+        </div>
+
+        <div class="setting-item">
+          <label>Skill Level</label>
+          <select id="skillLevel" onchange="updateSkill()">
+            <option value="beginner">Beginner — small, gentle waves</option>
+            <option value="intermediate" selected>Intermediate — moderate waves</option>
+            <option value="advanced">Advanced — bigger, powerful surf</option>
+          </select>
+        </div>
+
+        <div class="setting-item">
+          <label>Earliest Start — <span class="val" id="earliestHourVal">6:00</span></label>
+          <input type="range" id="earliestHour" min="4" max="12" step="1" value="6" oninput="document.getElementById('earliestHourVal').textContent=this.value+':00';saveSettings()">
+        </div>
+
+        <div class="setting-item">
+          <label>Latest End — <span class="val" id="latestHourVal">18:00</span></label>
+          <input type="range" id="latestHour" min="14" max="21" step="1" value="18" oninput="document.getElementById('latestHourVal').textContent=this.value+':00';saveSettings()">
+        </div>
+
+        <div class="setting-item">
+          <label>Min Session Length — <span class="val" id="minSessionVal">2 hrs</span></label>
+          <input type="range" id="minSessionHrs" min="1" max="6" step="1" value="2" oninput="document.getElementById('minSessionVal').textContent=this.value+' hrs';saveSettings()">
+        </div>
+
+      </div>
+
+      <!-- Tide section -->
+      <div class="divider"></div>
+      <div class="tide-section">
+        <div class="tide-section-title">🌊 Tide Preferences <span class="tide-badge" id="tideBadge">API key required</span></div>
+        <div class="settings-grid" style="margin-top:14px;">
+          <div class="setting-item">
+            <label>Min Tide Height — <span class="val" id="minTideVal">0.0 m</span></label>
+            <input type="range" id="minTide" min="-2" max="4" step="0.1" value="0.0" oninput="updateSliderSigned('minTide','minTideVal','m');saveSettings()">
+          </div>
+          <div class="setting-item">
+            <label>Max Tide Height — <span class="val" id="maxTideVal">3.0 m</span></label>
+            <input type="range" id="maxTide" min="-1" max="6" step="0.1" value="3.0" oninput="updateSliderSigned('maxTide','maxTideVal','m');saveSettings()">
+          </div>
+        </div>
+        <div class="setting-item" style="margin-top:14px;">
+          <label>WorldTides API Key <span style="font-weight:400;text-transform:none;letter-spacing:0;">(optional — for real tide data)</span></label>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input type="text" id="tidesApiKey" placeholder="Paste your WorldTides API key here…"
+              style="flex:1;background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:8px;
+                     padding:10px 12px;color:var(--text);font-size:0.88rem;outline:none;font-family:monospace;"
+              oninput="onTidesKeyInput()" />
+            <a href="https://www.worldtides.info/developer" target="_blank"
+               style="font-size:0.75rem;color:var(--teal);white-space:nowrap;text-decoration:none;">Get free key ↗</a>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
+            <label style="font-size:0.75rem;color:var(--light);white-space:nowrap;text-transform:none;letter-spacing:0;">Tide Datum:</label>
+            <select id="tideDatum" onchange="saveSettings()"
+              style="background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:8px;
+                     padding:6px 10px;color:var(--text);font-size:0.82rem;outline:none;">
+              <option value="CD" selected>CD — Chart Datum (local, recommended)</option>
+              <option value="LAT">LAT — Lowest Astronomical Tide</option>
+              <option value="MSL">MSL — Mean Sea Level</option>
+              <option value="MLLW">MLLW — Mean Lower Low Water</option>
+            </select>
+          </div>
+          <div style="font-size:0.75rem;color:var(--muted);margin-top:6px;line-height:1.5;">
+            Free tier at <strong style="color:var(--light)">worldtides.info</strong> — enter your key above to enable tide height filtering and display on each day card.
+            Without a key, wave &amp; wind conditions are still fully scored.
+            If tide values look too low/high, try a different <strong style="color:var(--light)">datum</strong>.
+          </div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+      <div style="font-size:0.8rem; color:var(--muted); line-height:1.6;">
+        🌊 <strong style="color:var(--light)">Wave data</strong> from Open-Meteo Marine API (free) &nbsp;|&nbsp;
+        💨 <strong style="color:var(--light)">Wind data</strong> from Open-Meteo Weather API &nbsp;|&nbsp;
+        🌊 <strong style="color:var(--light)">Tide data</strong> from WorldTides API (optional key) &nbsp;|&nbsp;
+        📊 All scores based on daylight hours only
+      </div>
+    </div>
+  </div>
+
+  <!-- Error box -->
+  <div class="error-box" id="errorBox"></div>
+
+  <!-- Fetch Button -->
+  <div class="fetch-row">
+    <button class="btn-fetch" id="fetchBtn" onclick="fetchForecast()" disabled>
+      🌊 Get 12-Day Forecast
+    </button>
+  </div>
+
+  <!-- Loading -->
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <p>Fetching surf conditions…</p>
+  </div>
+
+  <!-- Summary Bar -->
+  <div class="summary-bar" id="summaryBar">
+    <div class="summary-chip loc" id="summaryLoc">📍 —</div>
+    <div class="summary-chip good"><span class="num" id="countGood">0</span>&nbsp;Great days 🟢</div>
+    <div class="summary-chip ok"><span class="num" id="countOk">0</span>&nbsp;Decent days 🟡</div>
+    <div class="summary-chip bad"><span class="num" id="countBad">0</span>&nbsp;Poor days 🔴</div>
+  </div>
+
+  <!-- Tide Matching Diagnostic (hidden by default, visible on errors) -->
+  <div id="tideDiagnosticTop" style="display:none; background:#1a0a0a; border:2px solid #ef4444; border-radius:12px; padding:14px 18px; margin-bottom:16px; font-size:0.78rem; color:#e2e8f0;"></div>
+
+  <!-- Forecast Grid -->
+  <div class="forecast-grid" id="forecastGrid">
+    <div class="empty-state" style="grid-column:1/-1">
+      <div class="big">🌊</div>
+      <p>Search a location above and tap<br><strong>Get 12-Day Forecast</strong> to see surf conditions.</p>
+    </div>
+  </div>
+
+  <!-- Tide Debug Panel -->
+  <div class="tide-debug-card" id="tideDebugCard">
+    <div class="tide-debug-header" onclick="this.nextElementSibling.classList.toggle('open')">
+      🌊 Tide Data Debug <span style="font-size:0.75rem;color:var(--muted);font-weight:400;">(click to expand — verify your API data)</span>
+      <span style="float:right;color:var(--muted)">▼</span>
+    </div>
+    <div class="tide-debug-body" id="tideDebugBody"></div>
+  </div>
+
+  <!-- Email Section -->
+  <div class="email-card" id="emailCard">
+    <h3>📧 Email This Forecast</h3>
+    <div class="email-row">
+      <input type="email" id="emailInput" value="koinuten@gmail.com" placeholder="your@email.com" />
+      <button class="btn-copy" onclick="copyReport()" title="Copy report to clipboard">📋 Copy</button>
+      <button class="btn-email" onclick="sendEmail()">✉️ Open in Mail</button>
+    </div>
+    <div class="email-note">
+      ℹ️ "Open in Mail" composes an email in your default mail app. For automatic daily emails, run the <strong>surf_email.py</strong> companion script included in this folder.
+    </div>
+    <div class="email-status" id="emailStatus"></div>
+  </div>
+
+</div>
+
+<script>
+// ════════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════════
+let selectedLocation = null;
+let forecastDays = [];
+
+// ════════════════════════════════════════════════
+//  SETTINGS PERSISTENCE (localStorage)
+// ════════════════════════════════════════════════
+const SETTINGS_KEY = 'surfForecastSettings';
+
+function saveSettings() {
+  const settings = {
+    tidesApiKey: document.getElementById('tidesApiKey').value,
+    tideDatum:   document.getElementById('tideDatum').value,
+    minWave:     document.getElementById('minWave').value,
+    maxWave:     document.getElementById('maxWave').value,
+    maxWind:     document.getElementById('maxWind').value,
+    minPeriod:   document.getElementById('minPeriod').value,
+    beachFacing: document.getElementById('beachFacing').value,
+    minTide:     document.getElementById('minTide').value,
+    maxTide:     document.getElementById('maxTide').value,
+    earliestHour:  document.getElementById('earliestHour').value,
+    latestHour:    document.getElementById('latestHour').value,
+    minSessionHrs: document.getElementById('minSessionHrs').value,
+  };
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch(e) {}
+}
+
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (!raw) return;
+    const s = JSON.parse(raw);
+    const setVal = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val; };
+    setVal('tidesApiKey', s.tidesApiKey);
+    setVal('tideDatum',   s.tideDatum);
+    setVal('minWave',     s.minWave);
+    setVal('maxWave',     s.maxWave);
+    setVal('maxWind',     s.maxWind);
+    setVal('minPeriod',   s.minPeriod);
+    setVal('beachFacing', s.beachFacing);
+    setVal('minTide',     s.minTide);
+    setVal('maxTide',     s.maxTide);
+    setVal('earliestHour',  s.earliestHour);
+    setVal('latestHour',    s.latestHour);
+    setVal('minSessionHrs', s.minSessionHrs);
+    // Update hour labels
+    const ehEl = document.getElementById('earliestHour');
+    const lhEl = document.getElementById('latestHour');
+    const msEl = document.getElementById('minSessionHrs');
+    if (ehEl) document.getElementById('earliestHourVal').textContent = ehEl.value + ':00';
+    if (lhEl) document.getElementById('latestHourVal').textContent = lhEl.value + ':00';
+    if (msEl) document.getElementById('minSessionVal').textContent = msEl.value + ' hrs';
+    // Update slider labels
+    ['minWave','maxWave','maxWind','minPeriod'].forEach(id => {
+      const el = document.getElementById(id);
+      const labelId = id + 'Val';
+      const labelEl = document.getElementById(labelId);
+      if (el && labelEl) labelEl.textContent = el.value + (id === 'minPeriod' ? ' s' : id === 'maxWind' ? ' kn' : ' m');
+    });
+    // Update tide slider labels with sign
+    ['minTide','maxTide'].forEach(id => {
+      const labelId = id + 'Val';
+      if (document.getElementById(id) && document.getElementById(labelId)) {
+        updateSliderSigned(id, labelId, 'm');
+      }
+    });
+    // Update API key badge
+    onTidesKeyInput();
+  } catch(e) {}
+}
+
+// Load saved settings on page load
+loadSettings();
+
+// ════════════════════════════════════════════════
+//  FAVORITE LOCATIONS
+// ════════════════════════════════════════════════
+const FAVORITES_KEY = 'surfForecastFavorites';
+
+function getFavorites() {
+  try { return JSON.parse(localStorage.getItem(FAVORITES_KEY)) || []; } catch(e) { return []; }
+}
+
+function saveFavorite() {
+  if (!selectedLocation) return;
+  const favs = getFavorites();
+  // Avoid duplicates (same lat/lon)
+  if (favs.some(f => f.latitude === selectedLocation.latitude && f.longitude === selectedLocation.longitude)) return;
+  favs.push({
+    name:      selectedLocation.name,
+    admin1:    selectedLocation.admin1,
+    country:   selectedLocation.country,
+    latitude:  selectedLocation.latitude,
+    longitude: selectedLocation.longitude,
+  });
+  try { localStorage.setItem(FAVORITES_KEY, JSON.stringify(favs)); } catch(e) {}
+  renderFavorites();
+}
+
+function removeFavorite(idx) {
+  const favs = getFavorites();
+  favs.splice(idx, 1);
+  try { localStorage.setItem(FAVORITES_KEY, JSON.stringify(favs)); } catch(e) {}
+  renderFavorites();
+}
+
+function selectFavorite(idx) {
+  const favs = getFavorites();
+  const f = favs[idx];
+  if (!f) return;
+  selectedLocation = f;
+  const parts = [f.name, f.admin1, f.country].filter(Boolean).join(', ');
+  document.getElementById('locationInput').value = parts;
+  document.getElementById('selectedLocText').textContent = parts + ' (' + f.latitude.toFixed(4) + '\u00B0, ' + f.longitude.toFixed(4) + '\u00B0)';
+  document.getElementById('selectedLoc').classList.add('show');
+  document.getElementById('fetchBtn').disabled = false;
+}
+
+function renderFavorites() {
+  const favs = getFavorites();
+  const bar = document.getElementById('favBar');
+  if (!favs.length) { bar.innerHTML = ''; return; }
+  bar.innerHTML = favs.map((f, i) => {
+    const label = f.name + (f.country ? ', ' + f.country : '');
+    return '<span class="fav-chip" onclick="selectFavorite(' + i + ')">'
+      + label
+      + ' <span class="fav-x" onclick="event.stopPropagation();removeFavorite(' + i + ')" title="Remove">✕</span>'
+      + '</span>';
+  }).join('');
+}
+
+// Render favorites on page load
+renderFavorites();
+
+// ════════════════════════════════════════════════
+//  SETTINGS
+// ════════════════════════════════════════════════
+function updateSlider(id, labelId, unit) {
+  const v = parseFloat(document.getElementById(id).value).toFixed(unit === 'm' ? 1 : 0);
+  document.getElementById(labelId).textContent = v + ' ' + unit;
+}
+
+function updateSliderSigned(id, labelId, unit) {
+  const v = parseFloat(document.getElementById(id).value);
+  const formatted = (v >= 0 ? '+' : '') + v.toFixed(1) + ' ' + unit;
+  document.getElementById(labelId).textContent = formatted;
+}
+
+function onTidesKeyInput() {
+  const key = document.getElementById('tidesApiKey').value.trim();
+  const badge = document.getElementById('tideBadge');
+  saveSettings();
+  if (key.length > 6) {
+    badge.textContent = 'Active ✓';
+    badge.classList.add('active');
+  } else {
+    badge.textContent = 'API key required';
+    badge.classList.remove('active');
+  }
+}
+
+function updateSkill() {
+  const skill = document.getElementById('skillLevel').value;
+  const presets = {
+    beginner:     { minWave: 0.3, maxWave: 1.0, maxWind: 12, minPeriod: 6 },
+    intermediate: { minWave: 0.5, maxWave: 2.0, maxWind: 15, minPeriod: 8 },
+    advanced:     { minWave: 1.0, maxWave: 4.0, maxWind: 20, minPeriod: 10 },
+  };
+  const p = presets[skill];
+  document.getElementById('minWave').value = p.minWave; updateSlider('minWave','minWaveVal','m');
+  document.getElementById('maxWave').value = p.maxWave; updateSlider('maxWave','maxWaveVal','m');
+  document.getElementById('maxWind').value = p.maxWind; updateSlider('maxWind','maxWindVal','kn');
+  document.getElementById('minPeriod').value = p.minPeriod; updateSlider('minPeriod','minPeriodVal','s');
+}
+
+function getConditions() {
+  return {
+    minWave:     parseFloat(document.getElementById('minWave').value),
+    maxWave:     parseFloat(document.getElementById('maxWave').value),
+    maxWindKn:   parseFloat(document.getElementById('maxWind').value),
+    minPeriod:   parseFloat(document.getElementById('minPeriod').value),
+    beachFacing: document.getElementById('beachFacing').value,
+    minTide:     parseFloat(document.getElementById('minTide').value),
+    maxTide:     parseFloat(document.getElementById('maxTide').value),
+    tidesKey:    document.getElementById('tidesApiKey').value.trim(),
+    tideDatum:   document.getElementById('tideDatum').value,
+    earliestHour:  parseInt(document.getElementById('earliestHour').value),
+    latestHour:    parseInt(document.getElementById('latestHour').value),
+    minSessionHrs: parseInt(document.getElementById('minSessionHrs').value),
+  };
+}
+
+// ════════════════════════════════════════════════
+//  SETTINGS TOGGLE
+// ════════════════════════════════════════════════
+let settingsOpen = false;
+function toggleSettings() {
+  settingsOpen = !settingsOpen;
+  document.getElementById('settingsBody').classList.toggle('open', settingsOpen);
+  document.getElementById('chevron').classList.toggle('open', settingsOpen);
+}
+
+// ════════════════════════════════════════════════
+//  LOCATION SEARCH
+// ════════════════════════════════════════════════
+let searchTimeout;
+document.getElementById('locationInput').addEventListener('input', e => {
+  clearTimeout(searchTimeout);
+  const q = e.target.value.trim();
+  if (q.length < 2) { closeAutoList(); return; }
+  searchTimeout = setTimeout(() => searchLocations(q), 350);
+});
+
+document.getElementById('locationInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doSearch();
+});
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.search-row')) closeAutoList();
+});
+
+async function doSearch() {
+  const q = document.getElementById('locationInput').value.trim();
+  if (!q) return;
+  await searchLocations(q);
+}
+
+async function searchLocations(query) {
+  try {
+    const res = await fetch(
+      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=6&language=en&format=json`
+    );
+    const data = await res.json();
+    const results = data.results || [];
+    renderAutoList(results);
+  } catch(e) {
+    showError('Location search failed. Check your internet connection.');
+  }
+}
+
+function renderAutoList(results) {
+  const list = document.getElementById('autoList');
+  if (!results.length) { list.innerHTML = '<div class="autocomplete-item"><span class="loc-name">No results found</span></div>'; list.classList.add('show'); return; }
+  list.innerHTML = results.map((r,i) => {
+    const parts = [r.admin1, r.country].filter(Boolean).join(', ');
+    return `<div class="autocomplete-item" onclick="selectLocation(${i})" data-idx="${i}">
+      <div class="loc-name">${r.name}</div>
+      <div class="loc-sub">${parts}</div>
+    </div>`;
+  }).join('');
+  list.classList.add('show');
+  // store results
+  list._results = results;
+}
+
+function selectLocation(idx) {
+  const r = document.getElementById('autoList')._results[idx];
+  selectedLocation = r;
+  const parts = [r.name, r.admin1, r.country].filter(Boolean).join(', ');
+  document.getElementById('locationInput').value = parts;
+  document.getElementById('selectedLocText').textContent = `${parts} (${r.latitude.toFixed(4)}°, ${r.longitude.toFixed(4)}°)`;
+  document.getElementById('selectedLoc').classList.add('show');
+  document.getElementById('fetchBtn').disabled = false;
+  closeAutoList();
+}
+
+function closeAutoList() {
+  document.getElementById('autoList').classList.remove('show');
+}
+
+// ════════════════════════════════════════════════
+//  FORECAST FETCH
+// ════════════════════════════════════════════════
+async function fetchForecast() {
+  if (!selectedLocation) return;
+  hideError();
+  showLoading();
+  document.getElementById('fetchBtn').disabled = true;
+  document.getElementById('forecastGrid').innerHTML = '';
+  document.getElementById('summaryBar').classList.remove('show');
+  document.getElementById('emailCard').classList.remove('show');
+
+  const { latitude: lat, longitude: lon } = selectedLocation;
+  const cond = getConditions();
+
+  try {
+    const fetchPromises = [fetchMarine(lat, lon), fetchWeather(lat, lon)];
+    let tidesData = null;
+    if (cond.tidesKey.length > 6) {
+      document.querySelector('.loading p').textContent = 'Fetching surf & tide conditions…';
+      fetchPromises.push(
+        fetchTides(lat, lon, cond.tidesKey, cond.tideDatum).catch(e => {
+          // Non-fatal: warn but continue without tide data
+          showTideWarning('Tide fetch failed: ' + e.message);
+          // Show error in diagnostic box too
+          const _db = document.getElementById('tideDiagnosticTop');
+          if (_db) {
+            _db.style.display = 'block';
+            _db.innerHTML = `<div style="color:#ef4444;font-weight:700;">⚠ WorldTides API Error</div>
+              <div style="color:#fca5a5;font-size:0.78rem;margin-top:6px;">${e.message}</div>`;
+          }
+          return null;
+        })
+      );
+    }
+    const results = await Promise.all(fetchPromises);
+    const [marine, weather] = results;
+    tidesData = results[2] ?? null;
+    processForecast(marine, weather, tidesData);
+  } catch(e) {
+    showError('Failed to fetch forecast data: ' + e.message);
+  } finally {
+    hideLoading();
+    document.getElementById('fetchBtn').disabled = false;
+  }
+}
+
+async function fetchTides(lat, lon, apiKey, datum) {
+  // WorldTides API v3 — returns hourly heights for 16 days.
+  // IMPORTANT: start must be on an exact hour boundary.
+  // If start=14:32, data points land at 14:32, 15:32, 16:32…
+  // which won't match our hour-keyed lookup (14:00, 15:00, 16:00).
+  const startUnix = Math.floor(Date.now() / (1000 * 3600)) * 3600; // floor to current hour
+  // Always send datum param (default is CD = local chart datum)
+  const datumParam = `&datum=${datum || 'CD'}`;
+  const url = `https://www.worldtides.info/api/v3?heights`
+    + `&lat=${lat}&lon=${lon}`
+    + datumParam
+    + `&start=${startUnix}&days=16&step=3600`
+    + `&key=${encodeURIComponent(apiKey)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('WorldTides API error ' + res.status);
+  const data = await res.json();
+  if (data.error) throw new Error('WorldTides: ' + data.error);
+  return data; // data.heights = [{dt, date, height}, ...]
+}
+
+async function fetchMarine(lat, lon) {
+  const url = `https://marine-api.open-meteo.com/v1/marine?`
+    + `latitude=${lat}&longitude=${lon}`
+    + `&hourly=wave_height,wave_direction,wave_period,swell_wave_height,swell_wave_direction,swell_wave_period`
+    + `&forecast_days=16&timezone=auto`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('Marine API error ' + res.status);
+  return res.json();
+}
+
+async function fetchWeather(lat, lon) {
+  const url = `https://api.open-meteo.com/v1/forecast?`
+    + `latitude=${lat}&longitude=${lon}`
+    + `&hourly=wind_speed_10m,wind_direction_10m,wind_gusts_10m,weathercode`
+    + `&daily=sunrise,sunset,precipitation_sum`
+    + `&forecast_days=16&timezone=auto`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('Weather API error ' + res.status);
+  return res.json();
+}
+
+// ════════════════════════════════════════════════
+//  DATA PROCESSING
+// ════════════════════════════════════════════════
+function kmhToKnots(kmh) { return kmh * 0.539957; }
+function degToCompass(deg) {
+  const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+  return dirs[Math.round(deg / 22.5) % 16];
+}
+function waveEmoji(h) {
+  if (h < 0.5) return '🌊';
+  if (h < 1.0) return '🌊';
+  if (h < 2.0) return '🌊🌊';
+  return '🌊🌊🌊';
+}
+
+function isOffshore(windDirDeg, beachFacing) {
+  if (beachFacing === 'any') return null;
+  const facing = parseFloat(beachFacing);
+  // Offshore = wind blowing from land, so FROM opposite of beach facing
+  const offshoreFrom = (facing + 180) % 360;
+  const diff = Math.abs(windDirDeg - offshoreFrom);
+  const angle = Math.min(diff, 360 - diff);
+  if (angle <= 45) return 'offshore';
+  if (angle <= 90) return 'cross-off';
+  if (angle <= 135) return 'cross-on';
+  return 'onshore';
+}
+
+function windDirLabel(windDir, beachFacing) {
+  const type = isOffshore(windDir, beachFacing);
+  const compass = degToCompass(windDir);
+  if (!type) return compass;
+  const emoji = { offshore: '✅', 'cross-off': '↗️', 'cross-on': '↙️', onshore: '🚫' };
+  return `${compass} ${emoji[type]}`;
+}
+
+function scoreHour(waveH, windKn, period, windDir, tideH, cond) {
+  let score = 0;
+  // Wave height (0-35 pts — reduced slightly to make room for tide)
+  if (waveH >= cond.minWave && waveH <= cond.maxWave) {
+    const mid    = (cond.minWave + cond.maxWave) / 2;
+    const spread = (cond.maxWave - cond.minWave) / 2 || 0.1;
+    const dist   = Math.abs(waveH - mid) / spread;
+    score += Math.round(35 * (1 - dist * 0.4));
+  } else if (waveH < cond.minWave) {
+    score += Math.round(35 * (waveH / cond.minWave) * 0.4);
+  } else {
+    score += Math.max(0, Math.round(35 * (1 - (waveH - cond.maxWave) / cond.maxWave * 0.8)));
+  }
+  // Wind speed (0-30 pts)
+  if (windKn <= cond.maxWindKn) {
+    score += Math.round(30 * (1 - windKn / cond.maxWindKn * 0.4));
+  } else {
+    score += Math.max(0, Math.round(30 * (1 - (windKn - cond.maxWindKn) / cond.maxWindKn)));
+  }
+  // Wind direction (0-15 pts)
+  if (cond.beachFacing !== 'any') {
+    const type = isOffshore(windDir, cond.beachFacing);
+    const pts  = { offshore: 15, 'cross-off': 10, 'cross-on': 4, onshore: 0 };
+    score += pts[type] || 0;
+  } else {
+    score += 8; // neutral
+  }
+  // Swell period (0-10 pts)
+  score += period >= cond.minPeriod ? 10 : Math.round(10 * period / cond.minPeriod);
+
+  // Tide height (0-10 pts) — only scored when tide data is available.
+  // Strict cutoff: 0 pts outside the preferred range so the best window
+  // always favours hours where tide is actually within min/max.
+  if (tideH !== null) {
+    if (tideH >= cond.minTide && tideH <= cond.maxTide) {
+      // In range: full 10 pts, with a small bonus for being near the midpoint
+      const mid    = (cond.minTide + cond.maxTide) / 2;
+      const spread = (cond.maxTide - cond.minTide) / 2 || 0.1;
+      const dist   = Math.abs(tideH - mid) / spread;
+      score += Math.round(10 * (1 - dist * 0.2)); // stays ≥8 inside range
+    }
+    // Outside range → 0 pts (no partial credit).
+    // This is intentional: the best-window picker will then skip hours
+    // where tide is below minimum or above maximum.
+  }
+
+  return Math.min(100, Math.max(0, score));
+}
+
+// Parse "2024-06-01T05:23" → fractional hours (5.383...)
+function parseHourFrac(isoStr) {
+  if (!isoStr) return null;
+  const h = parseInt(isoStr.slice(11, 13));
+  const m = parseInt(isoStr.slice(14, 16));
+  return h + m / 60;
+}
+
+function fmtHHMM(isoStr) {
+  if (!isoStr) return '—';
+  return isoStr.slice(11, 16);
+}
+
+// Render the expandable "Best window" box for a day card
+function renderBestWinBox(d, cond) {
+  const bwd = d.bestWinDetails;
+  const hrs = bwd.hours || [];
+  const hasTideRows = hrs.some(h => h.tideH !== null);
+  const tideRows = hrs.map(h => {
+    let tideCell;
+    if (h.tideH !== null) {
+      const inRange = h.tideH >= cond.minTide && h.tideH <= cond.maxTide;
+      tideCell = `<td class="${inRange ? 'tide-in' : 'tide-out'}">${h.tideH.toFixed(2)}m</td>`;
+    } else {
+      tideCell = '<td style="opacity:0.4">—</td>';
+    }
+    return `<tr>
+      <td>${String(h.hour).padStart(2,'0')}:00</td>
+      <td>🌊 ${h.waveH !== null ? h.waveH.toFixed(1)+'m' : '—'}</td>
+      <td>💨 ${h.windKn !== null ? h.windKn.toFixed(0)+'kn' : '—'}</td>
+      ${tideCell}
+    </tr>`;
+  }).join('');
+
+  const tideAvg = bwd.tide !== null
+    ? `<span style="color:var(--green);font-weight:600">🌊 avg tide ${bwd.tide.toFixed(1)}m ✓</span>`
+    : '<span style="opacity:0.45;font-size:0.7rem">🌊 tide: add API key</span>';
+
+  const tideHeader = hasTideRows ? '🌊 Tide' : 'Tide';
+  const legend = hasTideRows
+    ? `<div style="font-size:0.64rem;color:var(--muted);margin-top:5px">Green = in your range (${cond.minTide.toFixed(1)}–${cond.maxTide.toFixed(1)}m)</div>`
+    : '';
+
+  return `
+    <div class="best-win-box" data-expandable="1">
+      <div class="best-win-title">
+        <span>⭐ Best window: <strong>${d.bestHour}:00 – ${d.bestEndHr}:00</strong></span>
+        <span style="display:flex;align-items:center;gap:6px">
+          <span class="best-win-score">${bwd.score}/100</span>
+          <span class="best-win-chevron">▼</span>
+        </span>
+      </div>
+      <div class="best-win-stats">
+        <span>🌊 ${bwd.wave.toFixed(1)}m</span>
+        <span>💨 ${bwd.wind.toFixed(0)}kn</span>
+        ${tideAvg}
+      </div>
+      <div class="best-win-expand">
+        <table>
+          <thead><tr><th>Hour</th><th>Wave</th><th>Wind</th><th>${tideHeader}</th></tr></thead>
+          <tbody>${tideRows}</tbody>
+        </table>
+        ${legend}
+      </div>
+    </div>`;
+}
+
+function processForecast(marine, weather, tidesData) {
+  // ── Always-visible diagnostic ──────────────────────────────────────
+  const _diagBox = document.getElementById('tideDiagnosticTop');
+  try { _runProcessForecast(marine, weather, tidesData); }
+  catch (err) {
+    if (_diagBox) {
+      _diagBox.style.display = 'block';
+      _diagBox.innerHTML = `<div style="color:#ef4444;font-weight:700;">⚠ processForecast ERROR</div>
+        <pre style="color:#fca5a5;font-size:0.72rem;white-space:pre-wrap;margin-top:6px;">${err.message}\n${err.stack}</pre>`;
+    }
+  }
+}
+
+function _runProcessForecast(marine, weather, tidesData) {
+  const _diagBox = document.getElementById('tideDiagnosticTop');
+  const cond = getConditions();
+  const hours = marine.hourly.time;
+  const timezone = marine.timezone;
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: timezone });
+
+  // Only show diagnostic on error (key present but no data)
+  if (_diagBox) {
+    const keyLen = cond.tidesKey ? cond.tidesKey.length : 0;
+    if (keyLen > 6 && !tidesData) {
+      _diagBox.style.display = 'block';
+      _diagBox.innerHTML = '<div style="color:#ef4444;font-weight:700;">⚠ Tide API Error</div>'
+        + '<div style="margin-top:4px;">Your WorldTides key is set but no data was received. Check your key or try again.</div>';
+    } else {
+      _diagBox.style.display = 'none';
+      _diagBox.innerHTML = '';
+    }
+  }
+
+  // Open-Meteo utc_offset_seconds: e.g. 32400 for Japan UTC+9
+  const utcOffsetSec = marine.utc_offset_seconds ?? weather.utc_offset_seconds ?? 0;
+
+  // ── Build tide map keyed by "YYYY-MM-DD|H" (date + integer hour) ────
+  // Using integer hours eliminates any zero-padding / string-format mismatch.
+  // WorldTides pt.dt is a UTC Unix timestamp.  Adding utcOffsetSec shifts
+  // it so that getUTC* methods return local calendar values.
+  const tideMap = {};
+  if (tidesData && tidesData.heights) {
+    tidesData.heights.forEach(pt => {
+      const d = new Date((pt.dt + utcOffsetSec) * 1000);
+      const yyyy = d.getUTCFullYear();
+      const mm   = String(d.getUTCMonth() + 1).padStart(2, '0');
+      const dd   = String(d.getUTCDate()).padStart(2, '0');
+      const hh   = d.getUTCHours(); // integer 0-23
+      const key  = `${yyyy}-${mm}-${dd}|${hh}`;
+      tideMap[key] = pt.height;
+    });
+  }
+  const hasTides = Object.keys(tideMap).length > 0;
+
+  // Diagnostic: log first few tideMap keys so we can spot mismatches
+  if (hasTides) {
+    const sampleKeys = Object.keys(tideMap).slice(0, 6);
+    console.log('[Surf] tideMap sample keys:', sampleKeys,
+                '| total entries:', Object.keys(tideMap).length,
+                '| utcOffsetSec:', utcOffsetSec);
+  }
+
+  // ── Populate visible debug panel ─────────────────────────────────
+  const dbCard = document.getElementById('tideDebugCard');
+  const dbBody = document.getElementById('tideDebugBody');
+  if (hasTides) {
+    dbCard.classList.add('show');
+    // Show the first 48 tide data points with local-time labels
+    const utcOff = marine.utc_offset_seconds ?? weather.utc_offset_seconds ?? 0;
+    const rows = tidesData.heights.slice(0, 48).map(pt => {
+      const localMs  = (pt.dt + utcOff) * 1000;
+      const localDt  = new Date(localMs);
+      const hh = localDt.getUTCHours();
+      const mm = String(localDt.getUTCMinutes()).padStart(2,'0');
+      const yyyy = localDt.getUTCFullYear();
+      const mon  = String(localDt.getUTCMonth() + 1).padStart(2, '0');
+      const day  = String(localDt.getUTCDate()).padStart(2, '0');
+      const dd   = `${yyyy}-${mon}-${day}`;
+      const mapKey = `${dd}|${hh}`;
+      const inRange  = pt.height >= cond.minTide && pt.height <= cond.maxTide;
+      return `<tr>
+        <td>${dd}</td><td>${String(hh).padStart(2,'0')}:${mm} (local)</td>
+        <td class="${inRange ? 'range-ok' : 'range-out'}">${pt.height.toFixed(2)} m${inRange ? ' ✓' : ''}</td>
+        <td style="font-family:monospace;font-size:0.65rem;color:var(--muted)">${mapKey}</td>
+      </tr>`;
+    }).join('');
+    const rangeStr = `${cond.minTide.toFixed(1)} – ${cond.maxTide.toFixed(1)} m`;
+    dbBody.innerHTML = `
+      <div style="padding:10px 14px;color:var(--muted);font-size:0.75rem;font-family:sans-serif;border-bottom:1px solid var(--border)">
+        <strong style="color:var(--light)">${tidesData.heights.length}</strong> tide points received &nbsp;|&nbsp;
+        UTC offset: <strong style="color:var(--light)">${utcOff / 3600}h</strong> &nbsp;|&nbsp;
+        Datum: <strong style="color:var(--light)">${cond.tideDatum || 'LAT'}</strong> &nbsp;|&nbsp;
+        Your tide range: <strong style="color:var(--teal)">${rangeStr}</strong>
+        &nbsp;— green rows = within your range
+      </div>
+      <table>
+        <thead><tr><th>Date</th><th>Local Time</th><th>Tide Height</th><th>Map Key</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  } else {
+    dbCard.classList.remove('show');
+  }
+
+  // ── Build sunrise/sunset map (keyed by date string) ──────────────
+  const sunMap = {};
+  if (weather.daily && weather.daily.time) {
+    weather.daily.time.forEach((date, i) => {
+      sunMap[date] = {
+        riseStr:  weather.daily.sunrise[i],
+        setStr:   weather.daily.sunset[i],
+        riseFrac: parseHourFrac(weather.daily.sunrise[i]),
+        setFrac:  parseHourFrac(weather.daily.sunset[i]),
+        rainMm:   weather.daily.precipitation_sum?.[i] ?? 0,
+      };
+    });
+  }
+
+  // ── Build hourly lookup ───────────────────────────────────────────
+  const byDate = {};
+  const _tideDiag = []; // collect first few lookups for visible diagnostics
+  // Build weather time index for fast lookup
+  const wTimeIdx = {};
+  weather.hourly.time.forEach((t, i) => { wTimeIdx[t] = i; });
+
+  for (let i = 0; i < hours.length; i++) {
+    const t    = hours[i];
+    const date = t.slice(0, 10);
+    const hour = parseInt(t.slice(11, 13));
+    if (!byDate[date]) byDate[date] = [];
+
+    const waveH   = marine.hourly.wave_height[i]            ?? null;
+    const waveDir = marine.hourly.wave_direction[i]          ?? null;
+    const period  = marine.hourly.wave_period[i]             ?? null;
+    const swellH  = marine.hourly.swell_wave_height[i]       ?? null;
+
+    const wi      = wTimeIdx[t] ?? -1;
+    const windKmh = wi >= 0 ? weather.hourly.wind_speed_10m[wi]    : null;
+    const windDir = wi >= 0 ? weather.hourly.wind_direction_10m[wi] : null;
+    const gustKmh = wi >= 0 ? weather.hourly.wind_gusts_10m[wi]    : null;
+
+    const windKn  = windKmh !== null ? kmhToKnots(windKmh) : null;
+    const gustKn  = gustKmh !== null ? kmhToKnots(gustKmh) : null;
+
+    // Lookup tide height using "YYYY-MM-DD|H" key (date + integer hour).
+    // `date` is already "YYYY-MM-DD", `hour` is already an integer — both
+    // extracted from the Open-Meteo time string `t` earlier in this loop.
+    const tideKey = `${date}|${hour}`;
+    const tideH   = tideMap[tideKey] ?? null;
+
+    // Collect first few lookups for on-page diagnostics
+    if (hasTides && i < 8) {
+      _tideDiag.push({ i, t, tideKey, tideH });
+    }
+
+    const score = (waveH !== null && windKn !== null && period !== null)
+      ? scoreHour(waveH, windKn, period, windDir, tideH, cond) : 0;
+
+    byDate[date].push({ hour, waveH, waveDir, period, swellH, windKn, windDir, gustKn, tideH, score });
+  }
+
+  // Count tide matches and show visible diagnostic on page
+  if (hasTides) {
+    let matched = 0, total = 0;
+    const allTideVals = [];
+    Object.values(byDate).forEach(hrs => hrs.forEach(h => {
+      total++;
+      if (h.tideH !== null) { matched++; allTideVals.push(h.tideH); }
+    }));
+    const dataMin = allTideVals.length ? Math.min(...allTideVals).toFixed(2) : '?';
+    const dataMax = allTideVals.length ? Math.max(...allTideVals).toFixed(2) : '?';
+    const inRangeCount = allTideVals.filter(v => v >= cond.minTide && v <= cond.maxTide).length;
+    const sampleKeys = Object.keys(tideMap).slice(0, 4).join(', ');
+    const diagRows = _tideDiag.map(d =>
+      `<tr><td>${d.i}</td><td style="font-family:monospace">${d.t}</td><td style="font-family:monospace">${d.tideKey}</td><td>${d.tideH !== null ? d.tideH.toFixed(2)+'m' : '<span style="color:#ef4444;font-weight:700">NULL ✗</span>'}</td></tr>`
+    ).join('');
+    const statusColor = matched === 0 ? '#ef4444' : matched < total / 2 ? '#f59e0b' : '#10b981';
+    const statusText  = matched === 0 ? '⚠ NO MATCHES — keys misaligned!' : matched < total / 2 ? '⚠ Partial match' : '✓ Good coverage';
+    const rangeColor  = inRangeCount === 0 ? '#ef4444' : '#10b981';
+    const diagHtml = `
+      <div style="font-size:0.85rem;font-weight:700;color:#0ea5e9;margin-bottom:8px;">🔍 Tide Matching Diagnostic</div>
+      <div style="font-size:0.8rem;margin-bottom:6px;">
+        <strong>${matched}</strong> / ${total} hourly slots matched tide data &nbsp;
+        <span style="color:${statusColor};font-weight:700">${statusText}</span>
+      </div>
+      <div style="font-size:0.82rem;margin-bottom:6px;padding:8px;background:rgba(255,255,255,0.05);border-radius:6px;">
+        <strong>WorldTides actual data range:</strong> <span style="color:#0ea5e9;font-weight:700">${dataMin}m – ${dataMax}m</span><br>
+        <strong>Your slider range:</strong> <span style="font-weight:700">${cond.minTide.toFixed(1)}m – ${cond.maxTide.toFixed(1)}m</span><br>
+        <strong>Hours in your range:</strong> <span style="color:${rangeColor};font-weight:700">${inRangeCount} / ${matched}</span>
+        ${inRangeCount === 0 ? '<br><span style="color:#ef4444;font-weight:700;">⚠ Your slider range does not overlap with the actual tide data! Adjust your Min/Max Tide sliders in Settings.</span>' : ''}
+      </div>
+      <div style="font-size:0.72rem;color:#94a3b8;margin-bottom:10px;">
+        tideMap sample keys: <span style="font-family:monospace;color:#e2e8f0">${sampleKeys}</span><br>
+        utcOffsetSec: <strong>${utcOffsetSec}</strong> (${utcOffsetSec/3600}h)
+      </div>
+      <table style="font-size:0.72rem;width:100%;border-collapse:collapse;">
+        <thead><tr style="border-bottom:1px solid #333;">
+          <th style="text-align:left;padding:3px;">#</th>
+          <th style="text-align:left;padding:3px;">Open-Meteo time</th>
+          <th style="text-align:left;padding:3px;">Lookup key</th>
+          <th style="text-align:left;padding:3px;">Tide result</th>
+        </tr></thead>
+        <tbody>${diagRows}</tbody>
+      </table>`;
+    const topDiag = document.getElementById('tideDiagnosticTop');
+    // Only show top diagnostic if there's a problem
+    if (topDiag) {
+      if (matched === 0 || inRangeCount === 0) {
+        topDiag.style.display = 'block';
+        topDiag.innerHTML = diagHtml;
+      } else {
+        topDiag.style.display = 'none';
+        topDiag.innerHTML = '';
+      }
+    }
+    if (dbBody) dbBody.innerHTML += diagHtml;
+  }
+
+  // ── Summarize each day (daylight hours only) ──────────────────────
+  const dates = Object.keys(byDate).sort().slice(0, 12);
+  forecastDays = dates.map(date => {
+    const allHrs = byDate[date].filter(h => h.waveH !== null);
+    if (!allHrs.length) return null;
+
+    // Sunrise / sunset for this date (fall back to 6:00 / 19:00 if missing)
+    const sun = sunMap[date] || { riseStr: null, setStr: null, riseFrac: 6, setFrac: 19 };
+
+    // Keep only hours that fall within daylight AND user's preferred time window
+    // ── Step 1: filter to daylight hours + user time preference ─────
+    const daylightHrs = allHrs.filter(h => {
+      return (h.hour + 1) > sun.riseFrac && h.hour < sun.setFrac
+          && h.hour >= cond.earliestHour && h.hour < cond.latestHour;
+    });
+    // Fall back to all hours only if polar night / missing sun data
+    const afterDaylight = daylightHrs.length ? daylightHrs : allHrs;
+
+    // ── Step 2: tide range hard-filter ──────────────────────────────
+    // For hydrofoil (and most surf), hours outside the preferred tide
+    // range are completely unusable — exclude them from ALL calculations.
+    // This is only applied when we actually have tide data.
+    let useHrs;
+    let noTideWindow = false;
+    // Tide info for the full daylight span (for the Tide Range row on card)
+    const allTideHrs    = afterDaylight.filter(h => h.tideH !== null);
+    const minTideDay    = allTideHrs.length ? Math.min(...allTideHrs.map(h => h.tideH)) : null;
+    const maxTideDay    = allTideHrs.length ? Math.max(...allTideHrs.map(h => h.tideH)) : null;
+    const tideGoodHrs   = allTideHrs.filter(h => h.tideH >= cond.minTide && h.tideH <= cond.maxTide).length;
+    const tidePct       = allTideHrs.length ? Math.round(tideGoodHrs / allTideHrs.length * 100) : null;
+
+    if (hasTides && allTideHrs.length > 0) {
+      // Keep only hours where tide is within the user's range
+      const tideFiltered = afterDaylight.filter(
+        h => h.tideH !== null && h.tideH >= cond.minTide && h.tideH <= cond.maxTide
+      );
+      if (tideFiltered.length > 0) {
+        useHrs = tideFiltered;
+      } else {
+        // No hour today has tide in range → day is unsurfable for hydrofoil
+        noTideWindow = true;
+        useHrs = afterDaylight; // keep for display stats, but score will be zeroed
+      }
+    } else {
+      useHrs = afterDaylight;
+    }
+
+    // ── Step 3: compute day stats from surfable hours ────────────────
+    const avgWave   = useHrs.reduce((s,h) => s + h.waveH, 0) / useHrs.length;
+    const maxWave   = Math.max(...useHrs.map(h => h.waveH));
+    const minWave   = Math.min(...useHrs.map(h => h.waveH));
+    const windHrs   = useHrs.filter(h => h.windKn !== null);
+    const avgWind   = windHrs.length ? windHrs.reduce((s,h) => s+h.windKn, 0) / windHrs.length : 0;
+    const periodHrs = useHrs.filter(h => h.period !== null);
+    const avgPeriod = periodHrs.length ? periodHrs.reduce((s,h) => s+h.period, 0) / periodHrs.length : 0;
+    const avgWindDir= windHrs.length ? windHrs.reduce((s,h) => s+h.windDir, 0) / windHrs.length : 0;
+    const swellHrs  = useHrs.filter(h => h.swellH !== null);
+    const avgSwellH = swellHrs.length ? swellHrs.reduce((s,h) => s+h.swellH, 0) / swellHrs.length : 0;
+
+    // ── Step 4: best consecutive window ────────────────────────────────
+    // useHrs may have gaps after tide filtering (e.g. 6,7,15,16).
+    // Split into runs of actually-consecutive hours.
+    // Strategy: find the longest run that meets minSess; among runs of
+    // equal length, pick the one with the highest avg score.
+    // This ensures we show the full surfable block, not just a tiny peak.
+    const minSess = cond.minSessionHrs || 2;
+    let bestWindow = null, bestWindowScore = -1;
+    let noConsecutiveWindow = false;
+    if (!noTideWindow && useHrs.length > 0) {
+      // Build runs of consecutive hours
+      const runs = [];
+      let run = [useHrs[0]];
+      for (let i = 1; i < useHrs.length; i++) {
+        if (useHrs[i].hour === useHrs[i-1].hour + 1) {
+          run.push(useHrs[i]);
+        } else {
+          runs.push(run);
+          run = [useHrs[i]];
+        }
+      }
+      if (run.length) runs.push(run);
+
+      // From each run that meets minSess, take the full run as a candidate.
+      // Then pick the candidate with the best avg score.
+      for (const r of runs) {
+        if (r.length < minSess) continue;
+        const ws = r.reduce((s,h) => s + h.score, 0) / r.length;
+        if (ws > bestWindowScore || (ws === bestWindowScore && bestWindow && r.length > bestWindow.length)) {
+          bestWindowScore = ws;
+          bestWindow = r;
+        }
+      }
+
+      // If no run meets minSess, flag it
+      if (!bestWindow && useHrs.length > 0) {
+        noConsecutiveWindow = true;
+      }
+    }
+    const bestHour  = bestWindow ? bestWindow[0].hour : null;
+    const bestEndHr = bestWindow ? bestWindow[bestWindow.length - 1].hour + 1 : null;
+
+    // Breakdown of the best window (shown on card, incl. per-hour rows for expand)
+    let bestWinDetails = null;
+    if (bestWindow) {
+      const bw    = bestWindow;
+      const bWave = bw.reduce((s,h) => s + h.waveH, 0) / bw.length;
+      const bWind = bw.filter(h => h.windKn !== null).reduce((s,h) => s + h.windKn, 0)
+                  / (bw.filter(h => h.windKn !== null).length || 1);
+      const bTideHrs = bw.filter(h => h.tideH !== null);
+      const bTide = bTideHrs.length
+        ? bTideHrs.reduce((s,h) => s + h.tideH, 0) / bTideHrs.length : null;
+      bestWinDetails = {
+        wave: bWave, wind: bWind, tide: bTide, score: Math.round(bestWindowScore),
+        hours: bw.map(h => ({ hour: h.hour, waveH: h.waveH, windKn: h.windKn, tideH: h.tideH }))
+      };
+    }
+
+    // ── Step 5: day score ────────────────────────────────────────────
+    // If tide data is available but no hour is in range → score 0 (unsurfable)
+    const rawDayScore = noTideWindow ? 0
+      : useHrs.reduce((s,h) => s+h.score, 0) / useHrs.length;
+    const rainMm      = sun.rainMm ?? 0;
+    const dayScore    = rainMm > 10 ? Math.min(rawDayScore, 30) : rawDayScore;
+
+    return {
+      date, isToday: date === today,
+      avgWave, maxWave, minWave, avgWind, avgPeriod, avgWindDir, avgSwellH,
+      dayScore, rawScore: rawDayScore,
+      bestHour, bestEndHr, bestWinDetails, rainMm,
+      noTideWindow, noConsecutiveWindow,
+      sunrise: sun.riseStr, sunset: sun.setStr,
+      riseFrac: sun.riseFrac, setFrac: sun.setFrac,
+      hasTides,
+      minTideDay, maxTideDay, tidePct,
+    };
+  }).filter(Boolean);
+
+  renderForecast(forecastDays, cond);
+}
+
+// ════════════════════════════════════════════════
+//  RENDER
+// ════════════════════════════════════════════════
+function renderForecast(days, cond = getConditions()) {
+  let great = 0, decent = 0, poor = 0;
+
+  const cards = days.map(d => {
+    // Days with no surfable window can't be "Great" regardless of score
+    let rating;
+    if (d.noTideWindow || d.noConsecutiveWindow) {
+      rating = 'poor';
+    } else {
+      rating = d.dayScore >= 68 ? 'great' : d.dayScore >= 45 ? 'decent' : 'poor';
+    }
+    if (rating === 'great') great++;
+    else if (rating === 'decent') decent++;
+    else poor++;
+
+    const dt = new Date(d.date + 'T12:00:00');
+    const weekday = dt.toLocaleDateString('en-US', { weekday: 'long' });
+    const dateFmt = dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+    const badgeText = rating === 'great' ? 'Great 🟢' : rating === 'decent' ? 'Decent 🟡' : 'Poor 🔴';
+    const badgeClass = `badge-${rating}`;
+
+    const offshoreLabel = windDirLabel(d.avgWindDir, cond.beachFacing);
+    const bestTime = d.bestHour !== null
+      ? `${d.bestHour}:00 – ${d.bestHour + 4}:00`
+      : '—';
+    const sunriseStr = fmtHHMM(d.sunrise);
+    const sunsetStr  = fmtHHMM(d.sunset);
+    const daylightHrs = d.sunrise && d.sunset
+      ? ((d.setFrac - d.riseFrac)).toFixed(1) + 'h daylight'
+      : '';
+
+    return `
+    <div class="day-card ${rating}">
+      <div class="day-header">
+        <div class="day-date">
+          <div class="weekday">${weekday}${d.isToday ? '<span class="tag-today">TODAY</span>' : ''}</div>
+          <div class="date">${dateFmt}</div>
+        </div>
+        <span class="day-badge ${badgeClass}">${badgeText}</span>
+      </div>
+      <div class="day-stats">
+        <div class="stat-row">
+          <span class="stat-label"><span class="icon">🌅</span> Sunrise</span>
+          <span class="stat-value" style="color:var(--yellow)">${sunriseStr}</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label"><span class="icon">🌇</span> Sunset</span>
+          <span class="stat-value" style="color:var(--yellow)">${sunsetStr}</span>
+        </div>
+        <div class="stat-row" style="border-top:1px solid var(--border);padding-top:8px;margin-top:2px">
+          <span class="stat-label"><span class="icon">🌊</span> Waves (daylight)</span>
+          <span class="stat-value">${d.minWave.toFixed(1)}–${d.maxWave.toFixed(1)} m</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label"><span class="icon">⏱</span> Swell Period</span>
+          <span class="stat-value">${d.avgPeriod.toFixed(0)} s</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label"><span class="icon">💨</span> Wind Speed</span>
+          <span class="stat-value">${d.avgWind.toFixed(0)} kn</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label"><span class="icon">🧭</span> Wind Dir</span>
+          <span class="stat-value wind-dir">${offshoreLabel}</span>
+        </div>
+        ${d.avgSwellH > 0 ? `
+        <div class="stat-row">
+          <span class="stat-label"><span class="icon">🌀</span> Swell Height</span>
+          <span class="stat-value">${d.avgSwellH.toFixed(1)} m</span>
+        </div>` : ''}
+        <div class="stat-row">
+          <span class="stat-label"><span class="icon">🌧</span> Rain</span>
+          <span class="stat-value" style="color:${d.rainMm > 10 ? 'var(--red)' : d.rainMm > 3 ? 'var(--yellow)' : 'var(--green)'}">
+            ${d.rainMm > 10 ? '🚫 Heavy ' : d.rainMm > 3 ? '⚠️ Light ' : '✅ Dry '}${d.rainMm.toFixed(1)} mm
+          </span>
+        </div>
+        ${d.hasTides && d.minTideDay !== null ? `
+        <div class="stat-row" style="border-top:1px solid var(--border);padding-top:8px;margin-top:2px">
+          <span class="stat-label"><span class="icon">🌊</span> Tide today</span>
+          <span class="stat-value">${d.minTideDay.toFixed(1)} – ${d.maxTideDay.toFixed(1)} m</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label"><span class="icon">🎯</span> Tide in range</span>
+          <span class="stat-value" style="color:${d.tidePct >= 70 ? 'var(--green)' : d.tidePct >= 40 ? 'var(--yellow)' : 'var(--red)'}">
+            ${d.tidePct}% of daylight hrs
+          </span>
+        </div>` : `
+        <div class="stat-row" style="opacity:0.45;border-top:1px solid var(--border);padding-top:8px;margin-top:2px">
+          <span class="stat-label"><span class="icon">🌊</span> Tide</span>
+          <span class="stat-value" style="font-size:0.75rem;color:var(--muted)">Add WorldTides key for tide data</span>
+        </div>`}
+      </div>
+      <div class="score-bar"><div class="score-fill" style="width:${d.dayScore.toFixed(0)}%"></div></div>
+      ${d.noTideWindow ? `
+      <div class="no-tide-box">
+        ⛔ No surfable tide window today
+        <div style="font-size:0.7rem;margin-top:3px;opacity:0.8;">
+          Tide stays ${d.minTideDay !== null ? d.minTideDay.toFixed(1)+'–'+d.maxTideDay.toFixed(1)+'m' : 'outside'}
+          your range of ${cond.minTide.toFixed(1)}–${cond.maxTide.toFixed(1)}m all day
+        </div>
+      </div>`
+      : d.noConsecutiveWindow
+      ? `<div style="margin-top:10px;padding:8px 12px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:8px;font-size:0.73rem;color:var(--yellow);">
+          ⚠ No consecutive ${cond.minSessionHrs || 2}h+ window — surfable hours are scattered
+        </div>`
+      : d.bestHour !== null && d.bestWinDetails
+      ? renderBestWinBox(d, cond)
+      : `<div style="margin-top:10px;font-size:0.73rem;color:var(--muted);">Not enough daylight data</div>`}
+    </div>`;
+  }).join('');
+
+  document.getElementById('forecastGrid').innerHTML = cards;
+
+  // Event delegation: click best-window boxes to expand/collapse hourly details
+  const grid = document.getElementById('forecastGrid');
+  grid.addEventListener('click', function(e) {
+    const box = e.target.closest('.best-win-box[data-expandable]');
+    if (box) {
+      box.classList.toggle('open');
+    }
+  });
+
+  // Summary
+  document.getElementById('countGood').textContent = great;
+  document.getElementById('countOk').textContent = decent;
+  document.getElementById('countBad').textContent = poor;
+  const locName = [selectedLocation.name, selectedLocation.admin1, selectedLocation.country].filter(Boolean).join(', ');
+  document.getElementById('summaryLoc').textContent = '📍 ' + locName;
+  document.getElementById('summaryBar').classList.add('show');
+  document.getElementById('emailCard').classList.add('show');
+}
+
+// ════════════════════════════════════════════════
+//  EMAIL / COPY
+// ════════════════════════════════════════════════
+function buildReportText() {
+  const locName = [selectedLocation.name, selectedLocation.admin1, selectedLocation.country].filter(Boolean).join(', ');
+  const cond = getConditions();
+  const now = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+  let lines = [
+    `🏄 SURF FORECAST — ${locName.toUpperCase()}`,
+    `Generated: ${now}`,
+    `Your ideal conditions: ${cond.minWave}–${cond.maxWave}m waves | Wind < ${cond.maxWindKn}kn | Period > ${cond.minPeriod}s`,
+    ``,
+    `12-DAY OUTLOOK`,
+    `──────────────────────────────────────`,
+  ];
+
+  forecastDays.forEach(d => {
+    const rise = fmtHHMM(d.sunrise);
+    const set  = fmtHHMM(d.sunset);
+    const dt = new Date(d.date + 'T12:00:00');
+    const label = dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    const rating = d.dayScore >= 68 ? '🟢 GREAT' : d.dayScore >= 45 ? '🟡 DECENT' : '🔴 POOR';
+    const bestTime = d.bestHour !== null ? ` | Best: ${d.bestHour}:00–${d.bestHour+4}:00` : '';
+    const sunLine  = (rise !== '—' && set !== '—') ? ` | ☀️ ${rise}–${set}` : '';
+    lines.push(`${label.padEnd(12)} ${rating.padEnd(12)} ${d.minWave.toFixed(1)}–${d.maxWave.toFixed(1)}m | ${d.avgWind.toFixed(0)}kn wind | ${d.avgPeriod.toFixed(0)}s period${bestTime}${sunLine}`);
+  });
+
+  const great = forecastDays.filter(d => d.dayScore >= 68);
+  if (great.length) {
+    lines.push(``, `✅ BEST DAYS TO SURF:`);
+    great.forEach(d => {
+      const dt = new Date(d.date + 'T12:00:00');
+      lines.push(`  • ${dt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}`);
+    });
+  }
+
+  lines.push(``, `─────────────────────────────────────`, `Data: Open-Meteo Marine & Weather API | App: Surf Forecast`);
+  return lines.join('\n');
+}
+
+async function copyReport() {
+  const text = buildReportText();
+  try {
+    await navigator.clipboard.writeText(text);
+    showEmailStatus('📋 Report copied to clipboard!', 'success');
+  } catch(e) {
+    showEmailStatus('Could not copy — try selecting and copying manually.', 'error');
+  }
+}
+
+function sendEmail() {
+  const email = document.getElementById('emailInput').value.trim();
+  if (!email) { showEmailStatus('Please enter an email address.', 'error'); return; }
+  const locName = [selectedLocation.name, selectedLocation.country].filter(Boolean).join(', ');
+  const subject = encodeURIComponent(`🏄 Surf Forecast — ${locName}`);
+  const body = encodeURIComponent(buildReportText());
+  const mailto = `mailto:${email}?subject=${subject}&body=${body}`;
+  window.open(mailto, '_blank');
+  showEmailStatus('✉️ Your default mail app should open with the report. Tip: use the companion Python script for automatic daily emails!', 'info');
+}
+
+function showEmailStatus(msg, type) {
+  const el = document.getElementById('emailStatus');
+  el.textContent = msg;
+  el.className = `email-status show ${type}`;
+  setTimeout(() => el.classList.remove('show'), 6000);
+}
+
+// ════════════════════════════════════════════════
+//  UI HELPERS
+// ════════════════════════════════════════════════
+function showLoading()  { document.getElementById('loading').classList.add('show'); document.querySelector('.loading p').textContent = 'Fetching surf conditions…'; }
+function hideLoading()  { document.getElementById('loading').classList.remove('show'); }
+function showError(msg) { const e = document.getElementById('errorBox'); e.textContent = msg; e.classList.add('show'); }
+function hideError()    { document.getElementById('errorBox').classList.remove('show'); }
+function showTideWarning(msg) {
+  const e = document.getElementById('errorBox');
+  e.textContent = '⚠️ Tide data unavailable: ' + msg + ' — continuing without tide filtering.';
+  e.style.background = 'rgba(245,158,11,0.1)';
+  e.style.borderColor = 'rgba(245,158,11,0.3)';
+  e.style.color = '#fbbf24';
+  e.classList.add('show');
+  setTimeout(() => { e.classList.remove('show'); e.style = ''; }, 8000);
+}
+
+// Open settings by default
+toggleSettings();
+</script>
+</body>
+</html>
