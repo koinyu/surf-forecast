@@ -659,7 +659,7 @@
   <header>
     <div class="wave-icon">🏄</div>
     <h1>Surf <span>Forecast</span></h1>
-    <p>12-day wave & wind forecast — find your perfect surf day</p>
+    <p>15-day wave & wind forecast — find your perfect surf day</p>
   </header>
 
   <!-- Location Search -->
@@ -1592,7 +1592,7 @@ function _runProcessForecast(marine, weather, tidesData) {
   }
 
   // ── Summarize each day (daylight hours only) ──────────────────────
-  const dates = Object.keys(byDate).sort().slice(0, 12);
+  const dates = Object.keys(byDate).sort().slice(0, 15);
   forecastDays = dates.map(date => {
     const allHrs = byDate[date].filter(h => h.waveH !== null);
     if (!allHrs.length) return null;
