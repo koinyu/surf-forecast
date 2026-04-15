@@ -1409,6 +1409,56 @@ function fmtHHMM(isoStr) {
   return isoStr.slice(11, 16);
 }
 
+// Render expandable box for poor/no-window days — still lets user see hourly data
+function renderPoorDayBox(d, cond, title, subtitle) {
+  const allHrs = d.allWindowHrs || [];
+  if (!allHrs.length) {
+    return `<div style="margin-top:10px;font-size:0.73rem;color:var(--muted);">${title}</div>`;
+  }
+  const hasTideData = allHrs.some(h => h.tideH !== null);
+  const rows = allHrs.map(h => {
+    let tideCell = '';
+    if (hasTideData) {
+      if (h.tideH !== null) {
+        const inRange = h.tideH >= cond.minTide && h.tideH <= cond.maxTide;
+        tideCell = `<td class="${inRange ? 'tide-in' : 'tide-out'}">${h.tideH.toFixed(2)}m</td>`;
+      } else {
+        tideCell = '<td style="opacity:0.35">—</td>';
+      }
+    }
+    const windDirStr = h.windDir !== null ? degToCompass(h.windDir) : '';
+    return `<tr style="opacity:0.8;">
+      <td>${String(h.hour).padStart(2,'0')}:00</td>
+      <td>${h.waveH !== null ? h.waveH.toFixed(1)+'m' : '—'}</td>
+      <td>${h.windKn !== null ? h.windKn.toFixed(0)+'kn' : '—'} <span style="font-size:0.62rem;color:var(--muted)">${windDirStr}</span></td>
+      <td>${h.period !== null ? h.period.toFixed(0)+'s' : '—'}</td>
+      ${tideCell}
+      <td style="font-size:0.65rem;color:var(--muted)">${h.score}/100</td>
+    </tr>`;
+  }).join('');
+
+  const isNoTide = title.includes('tide');
+  const boxBg = isNoTide ? 'rgba(239,68,68,0.07)' : 'rgba(245,158,11,0.07)';
+  const boxBorder = isNoTide ? 'rgba(239,68,68,0.3)' : 'rgba(245,158,11,0.3)';
+  const titleColor = isNoTide ? 'var(--red)' : 'var(--yellow)';
+
+  return `
+    <div class="best-win-box" data-expandable="1" style="background:${boxBg};border-color:${boxBorder};">
+      <div class="best-win-title">
+        <span style="color:${titleColor}">${title}</span>
+        <span class="best-win-chevron" style="color:${titleColor}">▼</span>
+      </div>
+      ${subtitle ? `<div style="font-size:0.7rem;color:var(--muted);margin-top:2px;">${subtitle}</div>` : ''}
+      <div class="best-win-expand">
+        <table>
+          <thead><tr><th>Hour</th><th>Wave</th><th>Wind</th><th>Period</th>${hasTideData ? '<th>Tide</th>' : ''}<th>Score</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <div style="font-size:0.64rem;color:var(--muted);margin-top:5px">tap to collapse</div>
+      </div>
+    </div>`;
+}
+
 // Render the expandable "Best window" box for a day card
 // Shows ALL hours in the user's time window, highlighting the best window range
 function renderBestWinBox(d, cond) {
@@ -1941,21 +1991,14 @@ function renderForecast(days, cond = getConditions()) {
         </div>`}
       </div>
       <div class="score-bar"><div class="score-fill" style="width:${d.dayScore.toFixed(0)}%"></div></div>
-      ${d.noTideWindow ? `
-      <div class="no-tide-box">
-        ⛔ No surfable tide window today
-        <div style="font-size:0.7rem;margin-top:3px;opacity:0.8;">
-          Tide stays ${d.minTideDay !== null ? d.minTideDay.toFixed(1)+'–'+d.maxTideDay.toFixed(1)+'m' : 'outside'}
-          your range of ${cond.minTide.toFixed(1)}–${cond.maxTide.toFixed(1)}m all day
-        </div>
-      </div>`
+      ${d.noTideWindow
+        ? renderPoorDayBox(d, cond, '⛔ No surfable tide window',
+            `Tide stays ${d.minTideDay !== null ? d.minTideDay.toFixed(1)+'–'+d.maxTideDay.toFixed(1)+'m' : 'outside'} — your range: ${cond.minTide.toFixed(1)}–${cond.maxTide.toFixed(1)}m`)
       : d.noConsecutiveWindow
-      ? `<div style="margin-top:10px;padding:8px 12px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:8px;font-size:0.73rem;color:var(--yellow);">
-          ⚠ No consecutive ${cond.minSessionHrs || 2}h+ window — surfable hours are scattered
-        </div>`
+        ? renderPoorDayBox(d, cond, `⚠ No consecutive ${cond.minSessionHrs || 2}h+ window`, 'Surfable hours are scattered')
       : d.bestHour !== null && d.bestWinDetails
-      ? renderBestWinBox(d, cond)
-      : `<div style="margin-top:10px;font-size:0.73rem;color:var(--muted);">Not enough daylight data</div>`}
+        ? renderBestWinBox(d, cond)
+      : renderPoorDayBox(d, cond, 'Not enough data', '')}
     </div>`;
   }).join('');
 
