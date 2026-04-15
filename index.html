@@ -792,31 +792,10 @@
       </div>
 
       <div class="divider"></div>
-      <!-- Swellcloud extended wave forecast -->
-      <div class="tide-section">
-        <div class="tide-section-title">🌊 Extended Wave Forecast <span class="tide-badge" id="swellBadge">Free: 10 days</span></div>
-        <div class="setting-item" style="margin-top:12px;">
-          <label>Swellcloud API Key <span style="font-weight:400;text-transform:none;letter-spacing:0;">(optional — extends forecast to 16 days)</span></label>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <input type="text" id="swellApiKey" placeholder="Paste your Swellcloud API key here…"
-              style="flex:1;background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:8px;
-                     padding:10px 12px;color:var(--text);font-size:0.88rem;outline:none;font-family:monospace;"
-              oninput="onSwellKeyInput()" />
-            <a href="https://api.swellcloud.net/request-access/" target="_blank"
-               style="font-size:0.75rem;color:var(--teal);white-space:nowrap;text-decoration:none;">Get key ↗</a>
-          </div>
-          <div style="font-size:0.75rem;color:var(--muted);margin-top:6px;line-height:1.5;">
-            <a href="https://api.swellcloud.net" target="_blank" style="color:var(--light)">api.swellcloud.net</a>
-            — request a free key to unlock 16-day GFS wave forecasts. Without a key, Open-Meteo provides 10 days.
-          </div>
-        </div>
-      </div>
-
-      <div class="divider"></div>
       <div style="font-size:0.8rem; color:var(--muted); line-height:1.6;">
-        🌊 <strong style="color:var(--light)">Wave data</strong> from Swellcloud (16 days, with key) or Open-Meteo (10 days, free) &nbsp;|&nbsp;
-        💨 <strong style="color:var(--light)">Wind data</strong> from Open-Meteo Weather API &nbsp;|&nbsp;
-        🌊 <strong style="color:var(--light)">Tide data</strong> from WorldTides API (optional key) &nbsp;|&nbsp;
+        🌊 <strong style="color:var(--light)">Wave data</strong> from Open-Meteo GFS Wave (16 days, free) &nbsp;|&nbsp;
+        💨 <strong style="color:var(--light)">Wind data</strong> from Open-Meteo Weather API (free) &nbsp;|&nbsp;
+        🌊 <strong style="color:var(--light)">Tide data</strong> from WorldTides API (requires free key) &nbsp;|&nbsp;
         📊 All scores based on daylight hours only
       </div>
     </div>
@@ -898,7 +877,6 @@ function saveSettings() {
   const settings = {
     tidesApiKey: document.getElementById('tidesApiKey').value,
     tideDatum:   document.getElementById('tideDatum').value,
-    swellApiKey: document.getElementById('swellApiKey').value,
     minWave:     document.getElementById('minWave').value,
     maxWave:     document.getElementById('maxWave').value,
     maxWind:     document.getElementById('maxWind').value,
@@ -921,8 +899,6 @@ function loadSettings() {
     const setVal = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val; };
     setVal('tidesApiKey', s.tidesApiKey);
     setVal('tideDatum',   s.tideDatum);
-    setVal('swellApiKey', s.swellApiKey);
-    onSwellKeyInput();
     setVal('minWave',     s.minWave);
     setVal('maxWave',     s.maxWave);
     setVal('maxWind',     s.maxWind);
@@ -1074,7 +1050,6 @@ function getConditions() {
     maxTide:     parseFloat(document.getElementById('maxTide').value),
     tidesKey:    document.getElementById('tidesApiKey').value.trim(),
     tideDatum:   document.getElementById('tideDatum').value,
-    swellKey:    document.getElementById('swellApiKey').value.trim(),
     earliestHour:  parseInt(document.getElementById('earliestHour').value),
     latestHour:    parseInt(document.getElementById('latestHour').value),
     minSessionHrs: parseInt(document.getElementById('minSessionHrs').value),
@@ -1175,15 +1150,7 @@ async function fetchForecast() {
   const cond = getConditions();
 
   try {
-    // Choose marine data source: Swellcloud (16 days) or Open-Meteo (10 days)
-    const marinePromise = cond.swellKey.length > 6
-      ? fetchSwellcloud(lat, lon, cond.swellKey).catch(e => {
-          showTideWarning('Swellcloud failed, falling back to Open-Meteo: ' + e.message);
-          return fetchMarine(lat, lon);
-        })
-      : fetchMarine(lat, lon);
-
-    const fetchPromises = [marinePromise, fetchWeather(lat, lon)];
+    const fetchPromises = [fetchMarine(lat, lon), fetchWeather(lat, lon)];
     let tidesData = null;
     if (cond.tidesKey.length > 6) {
       document.querySelector('.loading p').textContent = 'Fetching surf & tide conditions…';
@@ -1232,92 +1199,6 @@ async function fetchTides(lat, lon, apiKey, datum) {
   const data = await res.json();
   if (data.error) throw new Error('WorldTides: ' + data.error);
   return data; // data.heights = [{dt, date, height}, ...]
-}
-
-function onSwellKeyInput() {
-  const key = document.getElementById('swellApiKey').value.trim();
-  const badge = document.getElementById('swellBadge');
-  const btn   = document.getElementById('fetchBtn');
-  if (key.length > 6) {
-    badge.textContent = '16 days ✓';
-    badge.style.background = 'rgba(16,185,129,0.15)';
-    badge.style.color = 'var(--green)';
-  } else {
-    badge.textContent = 'Free: 10 days';
-    badge.style.background = '';
-    badge.style.color = '';
-  }
-  // Labels stay at 16 since Open-Meteo GFS Wave model always provides 16 days
-  saveSettings();
-}
-
-async function fetchSwellcloud(lat, lon, apiKey) {
-  // Swellcloud API v1 — GFS model — up to 16 days of wave forecast
-  const url = `https://api.swellcloud.net/v1/point?lat=${lat}&lon=${lon}`
-            + `&model=gfs&vars=hs,tp,dp,ss_hs,ss_dp,ww_hs,ww_dp&units=si`;
-  const res = await fetch(url, { headers: { 'X-API-Key': apiKey } });
-  if (!res.ok) throw new Error(`Swellcloud API error ${res.status}`);
-  const data = await res.json();
-
-  // Swellcloud returns: { "data": [{time, hs, tp, dp, ss_hs, ss_dp, ww_hs, ww_dp}, ...] }
-  // Data is 3-hourly UTC — we interpolate to hourly and store raw UTC ISO strings.
-  // Time conversion to local happens later in processForecast once we know utcOffsetSec.
-  const raw = data.data || data.hours || data.forecast || [];
-  if (!raw.length) throw new Error('Swellcloud: no data returned');
-
-  // ── Interpolate 3-hourly → hourly ────────────────────────────────────
-  // Linear interpolation for scalar wave values.
-  // Directions are NOT linearly interpolated (angle wrapping issues) — nearest value used.
-  function interpScalar(a, b, frac) {
-    if (a === null || b === null) return a ?? b ?? null;
-    return a + (b - a) * frac;
-  }
-
-  const pts = []; // will hold 1-hourly points
-  for (let i = 0; i < raw.length; i++) {
-    const curr = raw[i];
-    const next = raw[i + 1];
-    if (!next) { pts.push(curr); break; }
-    const gapHours = Math.round((new Date(next.time) - new Date(curr.time)) / 3600000);
-    for (let h = 0; h < gapHours; h++) {
-      const frac = h / gapHours;
-      const ms   = new Date(curr.time).getTime() + h * 3600000;
-      pts.push({
-        time:   new Date(ms).toISOString(),
-        hs:     interpScalar(curr.hs,    next.hs,    frac),
-        tp:     interpScalar(curr.tp,    next.tp,    frac),
-        dp:     curr.dp,     // direction: use current value
-        ss_hs:  interpScalar(curr.ss_hs, next.ss_hs, frac),
-        ss_dp:  curr.ss_dp,
-      });
-    }
-  }
-
-  // Build parallel arrays from the interpolated hourly points
-  const times = [], waveH = [], waveDir = [], wavePer = [], swellH = [], swellDir = [];
-  pts.forEach(pt => {
-    times.push(pt.time.slice(0, 16));   // "YYYY-MM-DDTHH:MM" UTC — converted to local later
-    waveH.push(pt.hs   ?? null);
-    waveDir.push(pt.dp  ?? null);
-    wavePer.push(pt.tp  ?? null);
-    swellH.push(pt.ss_hs ?? null);
-    swellDir.push(pt.ss_dp ?? null);
-  });
-
-  return {
-    hourly: {
-      time:                 times,
-      wave_height:          waveH,
-      wave_direction:       waveDir,
-      wave_period:          wavePer,
-      swell_wave_height:    swellH,
-      swell_wave_direction: swellDir,
-      swell_wave_period:    wavePer,
-    },
-    utc_offset_seconds: null,  // filled from weather API in processForecast
-    timezone: null,
-    _source: 'swellcloud',
-  };
 }
 
 async function fetchMarine(lat, lon) {
@@ -1515,17 +1396,6 @@ function _runProcessForecast(marine, weather, tidesData) {
   // Compute timezone offset early — needed for Swellcloud time conversion
   const utcOffsetSec = marine.utc_offset_seconds ?? weather.utc_offset_seconds ?? 0;
   const timezone = marine.timezone ?? weather.timezone ?? 'UTC';
-
-  // Swellcloud times are UTC. Convert to location-local time strings so they
-  // match the weather API times (which Open-Meteo already returns as local).
-  if (marine._source === 'swellcloud') {
-    marine.hourly.time = marine.hourly.time.map(utcStr => {
-      const localMs = new Date(utcStr + (utcStr.endsWith('Z') ? '' : 'Z')).getTime()
-                    + utcOffsetSec * 1000;
-      return new Date(localMs).toISOString().slice(0, 16);
-    });
-    marine.timezone = weather.timezone;
-  }
 
   const hours = marine.hourly.time;
   const today = new Date().toLocaleDateString('en-CA', { timeZone: timezone });
@@ -1727,7 +1597,7 @@ function _runProcessForecast(marine, weather, tidesData) {
   }
 
   // ── Summarize each day (daylight hours only) ──────────────────────
-  // GFS Wave model provides up to 16 days; Swellcloud also 16
+  // GFS Wave model provides up to 16 days of forecast data
   const dates = Object.keys(byDate).sort().slice(0, 16);
   forecastDays = dates.map(date => {
     const allHrs = byDate[date].filter(h => h.waveH !== null);
