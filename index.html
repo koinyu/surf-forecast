@@ -1256,31 +1256,50 @@ function onSwellKeyInput() {
 
 async function fetchSwellcloud(lat, lon, apiKey) {
   // Swellcloud API v1 — GFS model — up to 16 days of wave forecast
-  // https://api.swellcloud.net/docs
-  const today = new Date();
-  const start = today.toISOString().slice(0, 10);
-  const end   = new Date(today.getTime() + 16 * 86400000).toISOString().slice(0, 10);
-  const url   = `https://api.swellcloud.net/v1/point?lat=${lat}&lon=${lon}`
-              + `&model=gfs&start=${start}&end=${end}`
-              + `&vars=hs,tp,dp,ss_hs,ss_dp,ww_hs,ww_dp&units=si`;
+  const url = `https://api.swellcloud.net/v1/point?lat=${lat}&lon=${lon}`
+            + `&model=gfs&vars=hs,tp,dp,ss_hs,ss_dp,ww_hs,ww_dp&units=si`;
   const res = await fetch(url, { headers: { 'X-API-Key': apiKey } });
   if (!res.ok) throw new Error(`Swellcloud API error ${res.status}`);
   const data = await res.json();
 
-  // Convert Swellcloud response to Open-Meteo-compatible marine object.
-  // Swellcloud returns: { data: [{time, hs, tp, dp, ss_hs, ss_dp, ww_hs, ww_dp}, ...] }
-  const pts = data.data || data.hours || data.forecast || [];
-  if (!pts.length) throw new Error('Swellcloud: no data returned');
+  // Swellcloud returns: { "data": [{time, hs, tp, dp, ss_hs, ss_dp, ww_hs, ww_dp}, ...] }
+  // Data is 3-hourly UTC — we interpolate to hourly and store raw UTC ISO strings.
+  // Time conversion to local happens later in processForecast once we know utcOffsetSec.
+  const raw = data.data || data.hours || data.forecast || [];
+  if (!raw.length) throw new Error('Swellcloud: no data returned');
 
-  const times = [], waveH = [], waveDir = [], wavePer = [],
-        swellH = [], swellDir = [];
+  // ── Interpolate 3-hourly → hourly ────────────────────────────────────
+  // Linear interpolation for scalar wave values.
+  // Directions are NOT linearly interpolated (angle wrapping issues) — nearest value used.
+  function interpScalar(a, b, frac) {
+    if (a === null || b === null) return a ?? b ?? null;
+    return a + (b - a) * frac;
+  }
 
+  const pts = []; // will hold 1-hourly points
+  for (let i = 0; i < raw.length; i++) {
+    const curr = raw[i];
+    const next = raw[i + 1];
+    if (!next) { pts.push(curr); break; }
+    const gapHours = Math.round((new Date(next.time) - new Date(curr.time)) / 3600000);
+    for (let h = 0; h < gapHours; h++) {
+      const frac = h / gapHours;
+      const ms   = new Date(curr.time).getTime() + h * 3600000;
+      pts.push({
+        time:   new Date(ms).toISOString(),
+        hs:     interpScalar(curr.hs,    next.hs,    frac),
+        tp:     interpScalar(curr.tp,    next.tp,    frac),
+        dp:     curr.dp,     // direction: use current value
+        ss_hs:  interpScalar(curr.ss_hs, next.ss_hs, frac),
+        ss_dp:  curr.ss_dp,
+      });
+    }
+  }
+
+  // Build parallel arrays from the interpolated hourly points
+  const times = [], waveH = [], waveDir = [], wavePer = [], swellH = [], swellDir = [];
   pts.forEach(pt => {
-    // Normalise timestamp → "YYYY-MM-DDTHH:MM" local-style string
-    const raw = pt.time || pt.datetime || pt.timestamp || '';
-    const dt  = new Date(raw);
-    const iso = dt.toISOString().slice(0, 16); // "YYYY-MM-DDTHH:MM" UTC
-    times.push(iso);
+    times.push(pt.time.slice(0, 16));   // "YYYY-MM-DDTHH:MM" UTC — converted to local later
     waveH.push(pt.hs   ?? null);
     waveDir.push(pt.dp  ?? null);
     wavePer.push(pt.tp  ?? null);
@@ -1288,19 +1307,17 @@ async function fetchSwellcloud(lat, lon, apiKey) {
     swellDir.push(pt.ss_dp ?? null);
   });
 
-  // Return in same shape as fetchMarine() so processForecast() needs no changes
   return {
     hourly: {
-      time:                  times,
-      wave_height:           waveH,
-      wave_direction:        waveDir,
-      wave_period:           wavePer,
-      swell_wave_height:     swellH,
-      swell_wave_direction:  swellDir,
-      swell_wave_period:     wavePer, // Swellcloud TP is peak period; close enough
+      time:                 times,
+      wave_height:          waveH,
+      wave_direction:       waveDir,
+      wave_period:          wavePer,
+      swell_wave_height:    swellH,
+      swell_wave_direction: swellDir,
+      swell_wave_period:    wavePer,
     },
-    // utc_offset_seconds is filled in later from the weather API response
-    utc_offset_seconds: null,
+    utc_offset_seconds: null,  // filled from weather API in processForecast
     timezone: null,
     _source: 'swellcloud',
   };
@@ -1514,6 +1531,18 @@ function _runProcessForecast(marine, weather, tidesData) {
 
   // Open-Meteo utc_offset_seconds: e.g. 32400 for Japan UTC+9
   const utcOffsetSec = marine.utc_offset_seconds ?? weather.utc_offset_seconds ?? 0;
+
+  // Swellcloud times are UTC. Convert to location-local time strings so they
+  // match the weather API times (which Open-Meteo already returns as local).
+  if (marine._source === 'swellcloud') {
+    marine.hourly.time = marine.hourly.time.map(utcStr => {
+      // Adding utcOffsetSec to UTC ms gives a "fake UTC" whose getUTC* values = local time
+      const localMs = new Date(utcStr + (utcStr.endsWith('Z') ? '' : 'Z')).getTime()
+                    + utcOffsetSec * 1000;
+      return new Date(localMs).toISOString().slice(0, 16); // "YYYY-MM-DDTHH:MM" local
+    });
+    marine.timezone = weather.timezone;
+  }
 
   // ── Build tide map keyed by "YYYY-MM-DD|H" (date + integer hour) ────
   // Using integer hours eliminates any zero-padding / string-format mismatch.
