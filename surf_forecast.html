@@ -659,7 +659,7 @@
   <header>
     <div class="wave-icon">🏄</div>
     <h1>Surf <span>Forecast</span></h1>
-    <p>15-day wave & wind forecast — find your perfect surf day</p>
+    <p>10-day wave & wind forecast — find your perfect surf day</p>
   </header>
 
   <!-- Location Search -->
@@ -807,7 +807,7 @@
   <!-- Fetch Button -->
   <div class="fetch-row">
     <button class="btn-fetch" id="fetchBtn" onclick="fetchForecast()" disabled>
-      🌊 Get 15-Day Forecast
+      🌊 Get 10-Day Forecast
     </button>
   </div>
 
@@ -832,7 +832,7 @@
   <div class="forecast-grid" id="forecastGrid">
     <div class="empty-state" style="grid-column:1/-1">
       <div class="big">🌊</div>
-      <p>Search a location above and tap<br><strong>Get 15-Day Forecast</strong> to see surf conditions.</p>
+      <p>Search a location above and tap<br><strong>Get 10-Day Forecast</strong> to see surf conditions.</p>
     </div>
   </div>
 
@@ -1592,7 +1592,7 @@ function _runProcessForecast(marine, weather, tidesData) {
   }
 
   // ── Summarize each day (daylight hours only) ──────────────────────
-  const dates = Object.keys(byDate).sort().slice(0, 15);
+  const dates = Object.keys(byDate).sort().slice(0, 10);
   forecastDays = dates.map(date => {
     const allHrs = byDate[date].filter(h => h.waveH !== null);
     if (!allHrs.length) return null;
