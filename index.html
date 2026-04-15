@@ -677,6 +677,30 @@
       <button class="btn-fav" id="saveFavBtn" onclick="saveFavorite()" style="margin-left:auto;" title="Save to favorites">⭐ Save</button>
     </div>
     <div class="fav-bar" id="favBar"></div>
+    <!-- Custom spot entry -->
+    <div id="customSpotToggle" style="margin-top:8px;">
+      <span style="font-size:0.75rem;color:var(--teal);cursor:pointer;text-decoration:underline;" onclick="document.getElementById('customSpotForm').style.display=document.getElementById('customSpotForm').style.display==='none'?'flex':'none'">
+        + Add custom spot (enter coordinates)
+      </span>
+    </div>
+    <div id="customSpotForm" style="display:none;gap:8px;margin-top:8px;align-items:flex-end;flex-wrap:wrap;">
+      <div style="flex:1;min-width:120px;">
+        <label style="font-size:0.68rem;color:var(--muted);display:block;margin-bottom:3px;">Name</label>
+        <input type="text" id="customName" placeholder="Spot name"
+          style="width:100%;background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:0.85rem;outline:none;" />
+      </div>
+      <div style="min-width:90px;">
+        <label style="font-size:0.68rem;color:var(--muted);display:block;margin-bottom:3px;">Latitude</label>
+        <input type="number" id="customLat" placeholder="28.74" step="0.0001"
+          style="width:100%;background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:0.85rem;outline:none;" />
+      </div>
+      <div style="min-width:90px;">
+        <label style="font-size:0.68rem;color:var(--muted);display:block;margin-bottom:3px;">Longitude</label>
+        <input type="number" id="customLon" placeholder="-13.93" step="0.0001"
+          style="width:100%;background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:0.85rem;outline:none;" />
+      </div>
+      <button class="btn" onclick="addCustomSpot()" style="padding:8px 14px;font-size:0.82rem;">Add & Save</button>
+    </div>
   </div>
 
   <!-- Settings Panel -->
@@ -954,6 +978,11 @@ loadSettings();
 // ════════════════════════════════════════════════
 const FAVORITES_KEY = 'surfForecastFavorites';
 
+// Built-in preset spots that always appear
+const PRESET_SPOTS = [
+  { name: 'Majanicho', admin1: 'Fuerteventura', country: 'Spain', latitude: 28.7473, longitude: -13.9349 },
+];
+
 function getFavorites() {
   try { return JSON.parse(localStorage.getItem(FAVORITES_KEY)) || []; } catch(e) { return []; }
 }
@@ -993,17 +1022,61 @@ function selectFavorite(idx) {
   document.getElementById('fetchBtn').disabled = false;
 }
 
+function addCustomSpot() {
+  const name = document.getElementById('customName').value.trim();
+  const lat  = parseFloat(document.getElementById('customLat').value);
+  const lon  = parseFloat(document.getElementById('customLon').value);
+  if (!name) { alert('Please enter a spot name'); return; }
+  if (isNaN(lat) || isNaN(lon)) { alert('Please enter valid latitude and longitude'); return; }
+  const favs = getFavorites();
+  if (favs.some(f => f.name === name)) { alert(name + ' already exists'); return; }
+  favs.push({ name, admin1: '', country: '', latitude: lat, longitude: lon });
+  try { localStorage.setItem(FAVORITES_KEY, JSON.stringify(favs)); } catch(e) {}
+  // Also select it immediately
+  selectedLocation = favs[favs.length - 1];
+  const parts = [name].filter(Boolean).join(', ');
+  document.getElementById('locationInput').value = parts;
+  document.getElementById('selectedLocText').textContent = parts + ' (' + lat.toFixed(4) + '\u00B0, ' + lon.toFixed(4) + '\u00B0)';
+  document.getElementById('selectedLoc').classList.add('show');
+  document.getElementById('fetchBtn').disabled = false;
+  // Clear form and hide
+  document.getElementById('customName').value = '';
+  document.getElementById('customLat').value = '';
+  document.getElementById('customLon').value = '';
+  document.getElementById('customSpotForm').style.display = 'none';
+  renderFavorites();
+}
+
+function selectPreset(idx) {
+  const f = PRESET_SPOTS[idx];
+  if (!f) return;
+  selectedLocation = f;
+  const parts = [f.name, f.admin1, f.country].filter(Boolean).join(', ');
+  document.getElementById('locationInput').value = parts;
+  document.getElementById('selectedLocText').textContent = parts + ' (' + f.latitude.toFixed(4) + '\u00B0, ' + f.longitude.toFixed(4) + '\u00B0)';
+  document.getElementById('selectedLoc').classList.add('show');
+  document.getElementById('fetchBtn').disabled = false;
+}
+
 function renderFavorites() {
   const favs = getFavorites();
   const bar = document.getElementById('favBar');
-  if (!favs.length) { bar.innerHTML = ''; return; }
-  bar.innerHTML = favs.map((f, i) => {
+  let html = '';
+  // Preset spots (no remove button)
+  html += PRESET_SPOTS.map((f, i) => {
+    const label = f.name + (f.country ? ', ' + f.country : '');
+    return '<span class="fav-chip" onclick="selectPreset(' + i + ')" style="border-color:rgba(16,185,129,0.3);background:rgba(16,185,129,0.1);color:var(--green);">'
+      + '📍 ' + label + '</span>';
+  }).join('');
+  // User favorites (with remove button)
+  html += favs.map((f, i) => {
     const label = f.name + (f.country ? ', ' + f.country : '');
     return '<span class="fav-chip" onclick="selectFavorite(' + i + ')">'
       + label
       + ' <span class="fav-x" onclick="event.stopPropagation();removeFavorite(' + i + ')" title="Remove">✕</span>'
       + '</span>';
   }).join('');
+  bar.innerHTML = html;
 }
 
 // Render favorites on page load
