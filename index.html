@@ -1512,8 +1512,23 @@ function processForecast(marine, weather, tidesData) {
 function _runProcessForecast(marine, weather, tidesData) {
   const _diagBox = document.getElementById('tideDiagnosticTop');
   const cond = getConditions();
+
+  // Compute timezone offset early — needed for Swellcloud time conversion
+  const utcOffsetSec = marine.utc_offset_seconds ?? weather.utc_offset_seconds ?? 0;
+  const timezone = marine.timezone ?? weather.timezone ?? 'UTC';
+
+  // Swellcloud times are UTC. Convert to location-local time strings so they
+  // match the weather API times (which Open-Meteo already returns as local).
+  if (marine._source === 'swellcloud') {
+    marine.hourly.time = marine.hourly.time.map(utcStr => {
+      const localMs = new Date(utcStr + (utcStr.endsWith('Z') ? '' : 'Z')).getTime()
+                    + utcOffsetSec * 1000;
+      return new Date(localMs).toISOString().slice(0, 16);
+    });
+    marine.timezone = weather.timezone;
+  }
+
   const hours = marine.hourly.time;
-  const timezone = marine.timezone;
   const today = new Date().toLocaleDateString('en-CA', { timeZone: timezone });
 
   // Only show diagnostic on error (key present but no data)
@@ -1529,20 +1544,7 @@ function _runProcessForecast(marine, weather, tidesData) {
     }
   }
 
-  // Open-Meteo utc_offset_seconds: e.g. 32400 for Japan UTC+9
-  const utcOffsetSec = marine.utc_offset_seconds ?? weather.utc_offset_seconds ?? 0;
-
-  // Swellcloud times are UTC. Convert to location-local time strings so they
-  // match the weather API times (which Open-Meteo already returns as local).
-  if (marine._source === 'swellcloud') {
-    marine.hourly.time = marine.hourly.time.map(utcStr => {
-      // Adding utcOffsetSec to UTC ms gives a "fake UTC" whose getUTC* values = local time
-      const localMs = new Date(utcStr + (utcStr.endsWith('Z') ? '' : 'Z')).getTime()
-                    + utcOffsetSec * 1000;
-      return new Date(localMs).toISOString().slice(0, 16); // "YYYY-MM-DDTHH:MM" local
-    });
-    marine.timezone = weather.timezone;
-  }
+  // utcOffsetSec was computed above (before Swellcloud time conversion)
 
   // ── Build tide map keyed by "YYYY-MM-DD|H" (date + integer hour) ────
   // Using integer hours eliminates any zero-padding / string-format mismatch.
