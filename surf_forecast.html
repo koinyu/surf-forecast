@@ -659,7 +659,7 @@
   <header>
     <div class="wave-icon">🏄</div>
     <h1>Surf <span>Forecast</span></h1>
-    <p>16-day wave & wind forecast — find your perfect surf day</p>
+    <p>Up to 16-day wave & wind forecast — find your perfect surf day</p>
   </header>
 
   <!-- Location Search -->
@@ -728,6 +728,14 @@
             <option value="beginner">Beginner — small, gentle waves</option>
             <option value="intermediate" selected>Intermediate — moderate waves</option>
             <option value="advanced">Advanced — bigger, powerful surf</option>
+          </select>
+        </div>
+
+        <div class="setting-item">
+          <label>Wave Model</label>
+          <select id="waveModel" onchange="saveSettings()">
+            <option value="ecmwf_wam025" selected>ECMWF WAM — higher accuracy, 15 days</option>
+            <option value="ncep_gfswave025">NCEP GFS Wave — 16 days</option>
           </select>
         </div>
 
@@ -875,6 +883,7 @@ const SETTINGS_KEY = 'surfForecastSettings';
 
 function saveSettings() {
   const settings = {
+    waveModel:   document.getElementById('waveModel').value,
     tidesApiKey: document.getElementById('tidesApiKey').value,
     tideDatum:   document.getElementById('tideDatum').value,
     minWave:     document.getElementById('minWave').value,
@@ -897,6 +906,7 @@ function loadSettings() {
     if (!raw) return;
     const s = JSON.parse(raw);
     const setVal = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val; };
+    setVal('waveModel',   s.waveModel);
     setVal('tidesApiKey', s.tidesApiKey);
     setVal('tideDatum',   s.tideDatum);
     setVal('minWave',     s.minWave);
@@ -1048,6 +1058,7 @@ function getConditions() {
     beachFacing: document.getElementById('beachFacing').value,
     minTide:     parseFloat(document.getElementById('minTide').value),
     maxTide:     parseFloat(document.getElementById('maxTide').value),
+    waveModel:   document.getElementById('waveModel').value,
     tidesKey:    document.getElementById('tidesApiKey').value.trim(),
     tideDatum:   document.getElementById('tideDatum').value,
     earliestHour:  parseInt(document.getElementById('earliestHour').value),
@@ -1150,7 +1161,7 @@ async function fetchForecast() {
   const cond = getConditions();
 
   try {
-    const fetchPromises = [fetchMarine(lat, lon), fetchWeather(lat, lon)];
+    const fetchPromises = [fetchMarine(lat, lon, cond.waveModel), fetchWeather(lat, lon)];
     let tidesData = null;
     if (cond.tidesKey.length > 6) {
       document.querySelector('.loading p').textContent = 'Fetching surf & tide conditions…';
@@ -1201,13 +1212,15 @@ async function fetchTides(lat, lon, apiKey, datum) {
   return data; // data.heights = [{dt, date, height}, ...]
 }
 
-async function fetchMarine(lat, lon) {
-  // Use NCEP GFS Wave model for 16-day forecasts (default DWD only gives ~8 days)
+async function fetchMarine(lat, lon, model) {
+  // ECMWF WAM = higher accuracy (15 days), GFS Wave = longer range (16 days)
+  const m = model || 'ecmwf_wam025';
+  const days = m.startsWith('ecmwf') ? 15 : 16;
   const url = `https://marine-api.open-meteo.com/v1/marine?`
     + `latitude=${lat}&longitude=${lon}`
     + `&hourly=wave_height,wave_direction,wave_period,swell_wave_height,swell_wave_direction,swell_wave_period`
-    + `&models=ncep_gfswave025`
-    + `&forecast_days=16&timezone=auto`;
+    + `&models=${m}`
+    + `&forecast_days=${days}&timezone=auto`;
   const res = await fetch(url);
   if (!res.ok) throw new Error('Marine API error ' + res.status);
   return res.json();
