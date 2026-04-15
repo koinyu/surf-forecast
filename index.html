@@ -660,6 +660,7 @@
     <div class="wave-icon">🏄</div>
     <h1>Surf <span>Forecast</span></h1>
     <p>Up to 16-day wave & wind forecast — find your perfect surf day</p>
+    <p style="font-size:0.72rem;color:var(--muted);margin-top:2px;">All wave & wind data is free — no API key needed. Only tide data requires a WorldTides key.</p>
   </header>
 
   <!-- Location Search -->
@@ -801,10 +802,10 @@
 
       <div class="divider"></div>
       <div style="font-size:0.8rem; color:var(--muted); line-height:1.6;">
-        🌊 <strong style="color:var(--light)">Wave data</strong> from Open-Meteo GFS Wave (16 days, free) &nbsp;|&nbsp;
+        🌊 <strong style="color:var(--light)">Wave data</strong> from Open-Meteo (ECMWF 15 days / GFS 16 days, free) &nbsp;|&nbsp;
         💨 <strong style="color:var(--light)">Wind data</strong> from Open-Meteo Weather API (free) &nbsp;|&nbsp;
         🌊 <strong style="color:var(--light)">Tide data</strong> from WorldTides API (requires free key) &nbsp;|&nbsp;
-        📊 All scores based on daylight hours only
+        📊 All scores based on your time window &amp; daylight hours
       </div>
     </div>
   </div>
@@ -815,7 +816,7 @@
   <!-- Fetch Button -->
   <div class="fetch-row">
     <button class="btn-fetch" id="fetchBtn" onclick="fetchForecast()" disabled>
-      🌊 Get 16-Day Forecast
+      🌊 Get Forecast
     </button>
   </div>
 
@@ -840,7 +841,7 @@
   <div class="forecast-grid" id="forecastGrid">
     <div class="empty-state" style="grid-column:1/-1">
       <div class="big">🌊</div>
-      <p>Search a location above and tap<br><strong>Get 16-Day Forecast</strong> to see surf conditions.</p>
+      <p>Search a location above and tap<br><strong>Get Forecast</strong> to see surf conditions.</p>
     </div>
   </div>
 
