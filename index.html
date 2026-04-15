@@ -1410,23 +1410,38 @@ function fmtHHMM(isoStr) {
 }
 
 // Render the expandable "Best window" box for a day card
+// Shows ALL hours in the user's time window, highlighting the best window range
 function renderBestWinBox(d, cond) {
   const bwd = d.bestWinDetails;
-  const hrs = bwd.hours || [];
-  const hasTideRows = hrs.some(h => h.tideH !== null);
-  const tideRows = hrs.map(h => {
+  const allHrs = d.allWindowHrs || [];
+  const hasTideData = allHrs.some(h => h.tideH !== null);
+  const bestStart = d.bestHour;
+  const bestEnd   = d.bestEndHr;
+
+  const rows = allHrs.map(h => {
+    const inBestWin = h.hour >= bestStart && h.hour < bestEnd;
+    const rowStyle = inBestWin
+      ? 'background:rgba(14,165,233,0.1);font-weight:600;'
+      : 'opacity:0.7;';
+    const marker = inBestWin ? '⭐' : '';
+
     let tideCell;
     if (h.tideH !== null) {
       const inRange = h.tideH >= cond.minTide && h.tideH <= cond.maxTide;
       tideCell = `<td class="${inRange ? 'tide-in' : 'tide-out'}">${h.tideH.toFixed(2)}m</td>`;
     } else {
-      tideCell = '<td style="opacity:0.4">—</td>';
+      tideCell = '<td style="opacity:0.35">—</td>';
     }
-    return `<tr>
-      <td>${String(h.hour).padStart(2,'0')}:00</td>
-      <td>🌊 ${h.waveH !== null ? h.waveH.toFixed(1)+'m' : '—'}</td>
-      <td>💨 ${h.windKn !== null ? h.windKn.toFixed(0)+'kn' : '—'}</td>
+
+    const windDirStr = h.windDir !== null ? degToCompass(h.windDir) : '';
+
+    return `<tr style="${rowStyle}">
+      <td>${marker} ${String(h.hour).padStart(2,'0')}:00</td>
+      <td>${h.waveH !== null ? h.waveH.toFixed(1)+'m' : '—'}</td>
+      <td>${h.windKn !== null ? h.windKn.toFixed(0)+'kn' : '—'} <span style="font-size:0.62rem;color:var(--muted)">${windDirStr}</span></td>
+      <td>${h.period !== null ? h.period.toFixed(0)+'s' : '—'}</td>
       ${tideCell}
+      <td style="font-size:0.65rem;color:var(--muted)">${h.score}/100</td>
     </tr>`;
   }).join('');
 
@@ -1434,10 +1449,10 @@ function renderBestWinBox(d, cond) {
     ? `<span style="color:var(--green);font-weight:600">🌊 avg tide ${bwd.tide.toFixed(1)}m ✓</span>`
     : '<span style="opacity:0.45;font-size:0.7rem">🌊 tide: add API key</span>';
 
-  const tideHeader = hasTideRows ? '🌊 Tide' : 'Tide';
-  const legend = hasTideRows
-    ? `<div style="font-size:0.64rem;color:var(--muted);margin-top:5px">Green = in your range (${cond.minTide.toFixed(1)}–${cond.maxTide.toFixed(1)}m)</div>`
-    : '';
+  const legend = `<div style="font-size:0.64rem;color:var(--muted);margin-top:5px">
+    ⭐ = best window &nbsp;|&nbsp; tap to collapse`
+    + (hasTideData ? ` &nbsp;|&nbsp; <span class="tide-in">green</span> tide = in range (${cond.minTide.toFixed(1)}–${cond.maxTide.toFixed(1)}m)` : '')
+    + `</div>`;
 
   return `
     <div class="best-win-box" data-expandable="1">
@@ -1455,8 +1470,8 @@ function renderBestWinBox(d, cond) {
       </div>
       <div class="best-win-expand">
         <table>
-          <thead><tr><th>Hour</th><th>Wave</th><th>Wind</th><th>${tideHeader}</th></tr></thead>
-          <tbody>${tideRows}</tbody>
+          <thead><tr><th>Hour</th><th>Wave</th><th>Wind</th><th>Period</th><th>${hasTideData ? 'Tide' : ''}</th><th>Score</th></tr></thead>
+          <tbody>${rows}</tbody>
         </table>
         ${legend}
       </div>
@@ -1818,6 +1833,11 @@ function _runProcessForecast(marine, weather, tidesData) {
       riseFrac: sun.riseFrac, setFrac: sun.setFrac,
       hasTides,
       minTideDay, maxTideDay, tidePct,
+      // All hours in user's time window (for expanded view)
+      allWindowHrs: afterDaylight.map(h => ({
+        hour: h.hour, waveH: h.waveH, windKn: h.windKn, windDir: h.windDir,
+        tideH: h.tideH, period: h.period, score: h.score, gustKn: h.gustKn
+      })),
     };
   }).filter(Boolean);
 
@@ -1942,13 +1962,17 @@ function renderForecast(days, cond = getConditions()) {
   document.getElementById('forecastGrid').innerHTML = cards;
 
   // Event delegation: click best-window boxes to expand/collapse hourly details
+  // Remove any previous listener to avoid stacking on re-fetch
   const grid = document.getElementById('forecastGrid');
-  grid.addEventListener('click', function(e) {
+  if (grid._expandHandler) grid.removeEventListener('click', grid._expandHandler);
+  grid._expandHandler = function(e) {
     const box = e.target.closest('.best-win-box[data-expandable]');
     if (box) {
+      e.stopPropagation();
       box.classList.toggle('open');
     }
-  });
+  };
+  grid.addEventListener('click', grid._expandHandler);
 
   // Summary
   document.getElementById('countGood').textContent = great;
