@@ -1764,6 +1764,61 @@ function _runProcessForecast(marine, weather, tidesData) {
     byDate[date].push({ hour, waveH, waveDir, period, swellH, windKn, windDir, gustKn, tideH, score });
   }
 
+  // ── Wind history adjustment ("residual chop") ─────────────────────
+  // Onshore wind creates surface chop that lingers after the wind drops.
+  // - Onshore then calm: chop takes ~2 hours to settle → penalty decays
+  // - Onshore then offshore: offshore actively cleans the surface → smaller penalty
+  // - Offshore/calm history: no penalty, conditions are clean
+  // Applied per-day since overnight conditions mostly reset by morning.
+  if (cond.beachFacing !== 'any') {
+    const facing = parseFloat(cond.beachFacing);
+    const offshoreFrom = (facing + 180) % 360;
+
+    Object.values(byDate).forEach(hrs => {
+      for (let i = 0; i < hrs.length; i++) {
+        const h = hrs[i];
+        if (h.windDir === null) continue;
+
+        // Check previous 2 hours for onshore history
+        let chopPenalty = 0;
+        for (let back = 1; back <= 2; back++) {
+          const prev = hrs[i - back];
+          if (!prev || prev.windDir === null) continue;
+
+          // How onshore was the previous hour? (0 = offshore, 1 = onshore)
+          const prevDiff = Math.abs(prev.windDir - offshoreFrom);
+          const prevAngle = Math.min(prevDiff, 360 - prevDiff);
+          const prevOnshore = Math.max(0, (prevAngle - 90) / 90); // 0 if ≤90°, 1 if 180°
+
+          // How strong was the previous wind? Stronger = more chop created
+          const prevStrength = Math.min(1, prev.windKn / 12);
+
+          // Chop created by this previous hour (0-1 scale)
+          const chopCreated = prevOnshore * prevStrength;
+
+          // How quickly does current wind clean it up?
+          const currDiff = Math.abs(h.windDir - offshoreFrom);
+          const currAngle = Math.min(currDiff, 360 - currDiff);
+          // Offshore wind (angle < 60°) actively cleans → reduces penalty
+          // Calm wind → chop lingers
+          // Onshore wind → makes it worse (but already in base score)
+          const cleanupFactor = currAngle < 60 ? 0.3 : currAngle < 100 ? 0.6 : 0.9;
+
+          // Decay: further back = less impact (h-1: full, h-2: half)
+          const decay = back === 1 ? 1.0 : 0.5;
+
+          chopPenalty += chopCreated * cleanupFactor * decay;
+        }
+
+        // Apply penalty: reduce score by up to 15% for residual chop
+        if (chopPenalty > 0) {
+          const penaltyFactor = 1 - Math.min(0.15, chopPenalty * 0.15);
+          h.score = Math.round(h.score * penaltyFactor);
+        }
+      }
+    });
+  }
+
   // Count tide matches and show visible diagnostic on page
   if (hasTides) {
     let matched = 0, total = 0;
