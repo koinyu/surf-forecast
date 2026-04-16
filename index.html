@@ -1329,13 +1329,20 @@ function waveEmoji(h) {
 function isOffshore(windDirDeg, beachFacing) {
   if (beachFacing === 'any') return null;
   const facing = parseFloat(beachFacing);
-  // Offshore = wind blowing from land, so FROM opposite of beach facing
+  // Offshore = wind blowing FROM land (opposite of beach facing direction)
   const offshoreFrom = (facing + 180) % 360;
   const diff = Math.abs(windDirDeg - offshoreFrom);
   const angle = Math.min(diff, 360 - diff);
-  if (angle <= 45) return 'offshore';
-  if (angle <= 90) return 'cross-off';
-  if (angle <= 135) return 'cross-on';
+  // 6 wind types from best to worst for surfing:
+  //   0–30°   offshore       — wind holds up wave faces, best
+  //  30–60°   cross-off      — mostly offshore with slight cross, great
+  //  60–100°  sideshore      — perpendicular to waves, OK — doesn't push into face
+  // 100–140°  cross-on       — mostly onshore with cross component, bumpy
+  // 140–180°  onshore        — straight into wave face, worst
+  if (angle <= 30)  return 'offshore';
+  if (angle <= 60)  return 'cross-off';
+  if (angle <= 100) return 'sideshore';
+  if (angle <= 140) return 'cross-on';
   return 'onshore';
 }
 
@@ -1343,8 +1350,14 @@ function windDirLabel(windDir, beachFacing) {
   const type = isOffshore(windDir, beachFacing);
   const compass = degToCompass(windDir);
   if (!type) return compass;
-  const emoji = { offshore: '✅', 'cross-off': '↗️', 'cross-on': '↙️', onshore: '🚫' };
-  return `${compass} ${emoji[type]}`;
+  const emoji = {
+    offshore:  '✅',
+    'cross-off': '↗️',
+    sideshore: '➡️',
+    'cross-on': '↙️',
+    onshore:   '🚫'
+  };
+  return `${compass} ${emoji[type] || ''}`;
 }
 
 function scoreHour(waveH, windKn, period, windDir, tideH, cond) {
@@ -1384,10 +1397,11 @@ function scoreHour(waveH, windKn, period, windDir, tideH, cond) {
     // At low wind, direction barely matters. At high wind, it's critical.
     const speedFactor = Math.min(1, windKn / 10); // 0 at calm, 1 at 10kn+
     const dirMultipliers = {
-      'offshore':  1.0,   // offshore wind is good — holds up wave faces
-      'cross-off': 0.85,  // mostly offshore, slight cross component
-      'cross-on':  0.4,   // mostly onshore, makes it bumpy
-      'onshore':   0.15,  // onshore wind destroys wave quality
+      'offshore':  1.0,   // holds up wave faces perfectly
+      'cross-off': 0.88,  // mostly offshore, slight cross — still great
+      'sideshore': 0.65,  // perpendicular to waves — OK, doesn't push into face
+      'cross-on':  0.3,   // mostly onshore with cross component — bumpy
+      'onshore':   0.1,   // straight into wave face — destroys quality
     };
     const dirMult = dirMultipliers[type] || 0.5;
 
