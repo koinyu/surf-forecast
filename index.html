@@ -1396,14 +1396,14 @@ function scoreHour(waveH, windKn, period, windDir, tideH, cond) {
     // Direction multiplier: how much does direction help/hurt at this speed?
     // At low wind, direction barely matters. At high wind, it's critical.
     const speedFactor = Math.min(1, windKn / 10); // 0 at calm, 1 at 10kn+
-    const dirMultipliers = {
-      'offshore':  1.0,   // holds up wave faces perfectly
-      'cross-off': 0.88,  // mostly offshore, slight cross — still great
-      'sideshore': 0.65,  // perpendicular to waves — OK, doesn't push into face
-      'cross-on':  0.3,   // mostly onshore with cross component — bumpy
-      'onshore':   0.1,   // straight into wave face — destroys quality
-    };
-    const dirMult = dirMultipliers[type] || 0.5;
+    // Continuous direction multiplier based on exact angle from offshore.
+    // Uses a cosine curve: smoothly goes from 1.0 (pure offshore) to 0.1 (pure onshore).
+    // Every degree matters — NNE scores better than NE, NE better than ENE, etc.
+    const facing = parseFloat(cond.beachFacing);
+    const offshoreFrom = (facing + 180) % 360;
+    const diff = Math.abs(windDir - offshoreFrom);
+    const angle = Math.min(diff, 360 - diff); // 0 = offshore, 180 = onshore
+    const dirMult = 0.1 + 0.9 * (1 + Math.cos(angle * Math.PI / 180)) / 2;
 
     // Blend: at zero wind, everyone gets ~1.0 (glassy is great).
     // As wind increases, direction matters more.
