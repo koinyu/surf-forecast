@@ -1360,19 +1360,51 @@ function scoreHour(waveH, windKn, period, windDir, tideH, cond) {
   } else {
     score += Math.max(0, Math.round(35 * (1 - (waveH - cond.maxWave) / cond.maxWave * 0.8)));
   }
-  // Wind speed (0-30 pts)
-  if (windKn <= cond.maxWindKn) {
-    score += Math.round(30 * (1 - windKn / cond.maxWindKn * 0.4));
-  } else {
-    score += Math.max(0, Math.round(30 * (1 - (windKn - cond.maxWindKn) / cond.maxWindKn)));
-  }
-  // Wind direction (0-15 pts)
-  if (cond.beachFacing !== 'any') {
+  // Combined wind scoring (0-45 pts) — speed and direction interact:
+  //
+  // The key insight for surfing:
+  //   No wind (glassy)     → best conditions regardless of direction
+  //   Light offshore       → still great, cleans up the waves
+  //   Light onshore        → acceptable but not ideal
+  //   Moderate offshore    → good, holds up wave faces
+  //   Moderate onshore     → bumpy, degrades wave quality significantly
+  //   Strong any direction → not surfable
+  //
+  // Wind direction matters MORE as wind speed increases.
+  // At 0 knots, direction is irrelevant (glassy). At 15+ knots, direction
+  // is the difference between surfable and unsurfable.
+
+  if (cond.beachFacing !== 'any' && windDir !== null) {
     const type = isOffshore(windDir, cond.beachFacing);
-    const pts  = { offshore: 15, 'cross-off': 10, 'cross-on': 4, onshore: 0 };
-    score += pts[type] || 0;
+
+    // Base: how calm is the wind? (0-1 scale, 1 = no wind)
+    const calmness = Math.max(0, 1 - windKn / (cond.maxWindKn * 1.5));
+
+    // Direction multiplier: how much does direction help/hurt at this speed?
+    // At low wind, direction barely matters. At high wind, it's critical.
+    const speedFactor = Math.min(1, windKn / 10); // 0 at calm, 1 at 10kn+
+    const dirMultipliers = {
+      'offshore':  1.0,   // offshore wind is good — holds up wave faces
+      'cross-off': 0.85,  // mostly offshore, slight cross component
+      'cross-on':  0.4,   // mostly onshore, makes it bumpy
+      'onshore':   0.15,  // onshore wind destroys wave quality
+    };
+    const dirMult = dirMultipliers[type] || 0.5;
+
+    // Blend: at zero wind, everyone gets ~1.0 (glassy is great).
+    // As wind increases, direction matters more.
+    const blended = (1 - speedFactor) * 1.0 + speedFactor * dirMult;
+
+    // Final wind score: calmness gives base points, blended adjusts for direction
+    const windScore = calmness * blended;
+    score += Math.round(45 * Math.max(0, Math.min(1, windScore)));
   } else {
-    score += 8; // neutral
+    // No beach orientation set — score purely on wind speed (lower = better)
+    if (windKn <= cond.maxWindKn) {
+      score += Math.round(45 * (1 - windKn / cond.maxWindKn * 0.4));
+    } else {
+      score += Math.max(0, Math.round(45 * (1 - (windKn - cond.maxWindKn) / cond.maxWindKn)));
+    }
   }
   // Swell period (0-10 pts)
   score += period >= cond.minPeriod ? 10 : Math.round(10 * period / cond.minPeriod);
@@ -1426,11 +1458,11 @@ function renderPoorDayBox(d, cond, title, subtitle) {
         tideCell = '<td style="opacity:0.35">—</td>';
       }
     }
-    const windDirStr = h.windDir !== null ? degToCompass(h.windDir) : '';
+    const windLabel = h.windDir !== null ? windDirLabel(h.windDir, cond.beachFacing) : '';
     return `<tr style="opacity:0.8;">
       <td>${String(h.hour).padStart(2,'0')}:00</td>
       <td>${h.waveH !== null ? h.waveH.toFixed(1)+'m' : '—'}</td>
-      <td>${h.windKn !== null ? h.windKn.toFixed(0)+'kn' : '—'} <span style="font-size:0.62rem;color:var(--muted)">${windDirStr}</span></td>
+      <td>${h.windKn !== null ? h.windKn.toFixed(0)+'kn' : '—'} <span style="font-size:0.62rem">${windLabel}</span></td>
       <td>${h.period !== null ? h.period.toFixed(0)+'s' : '—'}</td>
       ${tideCell}
       <td style="font-size:0.65rem;color:var(--muted)">${h.score}/100</td>
@@ -1483,12 +1515,12 @@ function renderBestWinBox(d, cond) {
       tideCell = '<td style="opacity:0.35">—</td>';
     }
 
-    const windDirStr = h.windDir !== null ? degToCompass(h.windDir) : '';
+    const windLabel = h.windDir !== null ? windDirLabel(h.windDir, cond.beachFacing) : '';
 
     return `<tr style="${rowStyle}">
       <td>${marker} ${String(h.hour).padStart(2,'0')}:00</td>
       <td>${h.waveH !== null ? h.waveH.toFixed(1)+'m' : '—'}</td>
-      <td>${h.windKn !== null ? h.windKn.toFixed(0)+'kn' : '—'} <span style="font-size:0.62rem;color:var(--muted)">${windDirStr}</span></td>
+      <td>${h.windKn !== null ? h.windKn.toFixed(0)+'kn' : '—'} <span style="font-size:0.62rem">${windLabel}</span></td>
       <td>${h.period !== null ? h.period.toFixed(0)+'s' : '—'}</td>
       ${tideCell}
       <td style="font-size:0.65rem;color:var(--muted)">${h.score}/100</td>
