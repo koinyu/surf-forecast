@@ -374,8 +374,10 @@
       letter-spacing: 0.06em;
       text-transform: uppercase;
     }
+    .badge-epic { background: rgba(99,102,241,0.15); color: #818cf8; border: 1px solid rgba(99,102,241,0.3); }
     .badge-great { background: var(--green-glow); color: var(--green); border: 1px solid rgba(16,185,129,0.3); }
     .badge-decent { background: var(--yellow-glow); color: var(--yellow); border: 1px solid rgba(245,158,11,0.3); }
+    .badge-marginal { background: rgba(251,146,60,0.15); color: #fb923c; border: 1px solid rgba(251,146,60,0.3); }
     .badge-poor { background: var(--red-glow); color: var(--red); border: 1px solid rgba(239,68,68,0.3); }
 
     .day-stats { display: flex; flex-direction: column; gap: 9px; }
@@ -853,9 +855,11 @@
   <!-- Summary Bar -->
   <div class="summary-bar" id="summaryBar">
     <div class="summary-chip loc" id="summaryLoc">📍 —</div>
-    <div class="summary-chip good"><span class="num" id="countGood">0</span>&nbsp;Great days 🟢</div>
-    <div class="summary-chip ok"><span class="num" id="countOk">0</span>&nbsp;Decent days 🟡</div>
-    <div class="summary-chip bad"><span class="num" id="countBad">0</span>&nbsp;Poor days 🔴</div>
+    <div class="summary-chip" style="color:#818cf8"><span class="num" id="countEpic">0</span>&nbsp;Epic 🟣</div>
+    <div class="summary-chip good"><span class="num" id="countGreat">0</span>&nbsp;Great 🟢</div>
+    <div class="summary-chip ok"><span class="num" id="countDecent">0</span>&nbsp;Decent 🟡</div>
+    <div class="summary-chip" style="color:#fb923c"><span class="num" id="countMarginal">0</span>&nbsp;Marginal 🟠</div>
+    <div class="summary-chip bad"><span class="num" id="countPoor">0</span>&nbsp;Poor 🔴</div>
   </div>
 
   <!-- Tide Matching Diagnostic (hidden by default, visible on errors) -->
@@ -1944,25 +1948,40 @@ function _runProcessForecast(marine, weather, tidesData) {
 //  RENDER
 // ════════════════════════════════════════════════
 function renderForecast(days, cond = getConditions()) {
-  let great = 0, decent = 0, poor = 0;
+  const counts = { epic: 0, great: 0, decent: 0, marginal: 0, poor: 0 };
 
   const cards = days.map(d => {
-    // Days with no surfable window can't be "Great" regardless of score
+    // 5-level rating system:
+    //   Epic     ≥ 80  — everything lines up perfectly, drop everything and go
+    //   Great    ≥ 65  — very good conditions, well worth the trip
+    //   Decent   ≥ 50  — surfable and fun, minor compromises
+    //   Marginal ≥ 35  — possible but conditions are mediocre
+    //   Poor     < 35  — not worth it
     let rating;
     if (d.noTideWindow || d.noConsecutiveWindow) {
       rating = 'poor';
+    } else if (d.dayScore >= 80) {
+      rating = 'epic';
+    } else if (d.dayScore >= 65) {
+      rating = 'great';
+    } else if (d.dayScore >= 50) {
+      rating = 'decent';
+    } else if (d.dayScore >= 35) {
+      rating = 'marginal';
     } else {
-      rating = d.dayScore >= 68 ? 'great' : d.dayScore >= 45 ? 'decent' : 'poor';
+      rating = 'poor';
     }
-    if (rating === 'great') great++;
-    else if (rating === 'decent') decent++;
-    else poor++;
+    counts[rating]++;
 
     const dt = new Date(d.date + 'T12:00:00');
     const weekday = dt.toLocaleDateString('en-US', { weekday: 'long' });
     const dateFmt = dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
-    const badgeText = rating === 'great' ? 'Great 🟢' : rating === 'decent' ? 'Decent 🟡' : 'Poor 🔴';
+    const badgeLabels = {
+      epic: 'Epic 🟣', great: 'Great 🟢', decent: 'Decent 🟡',
+      marginal: 'Marginal 🟠', poor: 'Poor 🔴'
+    };
+    const badgeText = badgeLabels[rating];
     const badgeClass = `badge-${rating}`;
 
     const offshoreLabel = windDirLabel(d.avgWindDir, cond.beachFacing);
@@ -2064,9 +2083,11 @@ function renderForecast(days, cond = getConditions()) {
   grid.addEventListener('click', grid._expandHandler);
 
   // Summary
-  document.getElementById('countGood').textContent = great;
-  document.getElementById('countOk').textContent = decent;
-  document.getElementById('countBad').textContent = poor;
+  document.getElementById('countEpic').textContent = counts.epic;
+  document.getElementById('countGreat').textContent = counts.great;
+  document.getElementById('countDecent').textContent = counts.decent;
+  document.getElementById('countMarginal').textContent = counts.marginal;
+  document.getElementById('countPoor').textContent = counts.poor;
   const locName = [selectedLocation.name, selectedLocation.admin1, selectedLocation.country].filter(Boolean).join(', ');
   document.getElementById('summaryLoc').textContent = '📍 ' + locName;
   document.getElementById('summaryBar').classList.add('show');
@@ -2095,13 +2116,13 @@ function buildReportText() {
     const set  = fmtHHMM(d.sunset);
     const dt = new Date(d.date + 'T12:00:00');
     const label = dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-    const rating = d.dayScore >= 68 ? '🟢 GREAT' : d.dayScore >= 45 ? '🟡 DECENT' : '🔴 POOR';
+    const rating = d.dayScore >= 80 ? '🟣 EPIC' : d.dayScore >= 65 ? '🟢 GREAT' : d.dayScore >= 50 ? '🟡 DECENT' : d.dayScore >= 35 ? '🟠 MARGINAL' : '🔴 POOR';
     const bestTime = d.bestHour !== null ? ` | Best: ${d.bestHour}:00–${d.bestHour+4}:00` : '';
     const sunLine  = (rise !== '—' && set !== '—') ? ` | ☀️ ${rise}–${set}` : '';
     lines.push(`${label.padEnd(12)} ${rating.padEnd(12)} ${d.minWave.toFixed(1)}–${d.maxWave.toFixed(1)}m | ${d.avgWind.toFixed(0)}kn wind | ${d.avgPeriod.toFixed(0)}s period${bestTime}${sunLine}`);
   });
 
-  const great = forecastDays.filter(d => d.dayScore >= 68);
+  const great = forecastDays.filter(d => d.dayScore >= 65);
   if (great.length) {
     lines.push(``, `✅ BEST DAYS TO SURF:`);
     great.forEach(d => {
