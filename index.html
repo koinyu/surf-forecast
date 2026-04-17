@@ -4,6 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>🏄 Surf Forecast</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+        crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+          crossorigin="" defer></script>
   <style>
     :root {
       --deep: #050f1c;
@@ -140,6 +146,35 @@
     .autocomplete-item:hover { background: var(--card-hover); }
     .autocomplete-item .loc-name { font-weight: 600; }
     .autocomplete-item .loc-sub { color: var(--light); font-size: 0.8rem; }
+    .autocomplete-item.add-custom {
+      background: rgba(14,165,233,0.06);
+      border-top: 1px solid var(--border);
+    }
+    .autocomplete-item.add-custom:hover { background: rgba(14,165,233,0.14); }
+    .autocomplete-item.add-custom .loc-name { color: var(--teal); }
+
+    /* Custom spot picker */
+    #customMap {
+      height: 260px;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      margin-top: 10px;
+      background: #0a1e33;
+    }
+    #customMap .leaflet-control-attribution {
+      background: rgba(14,37,64,0.8);
+      color: var(--light);
+    }
+    #customMap .leaflet-control-attribution a { color: var(--teal); }
+    .custom-hint {
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-top: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
 
     .selected-location {
       margin-top: 14px;
@@ -304,6 +339,12 @@
     .summary-chip.ok .num { color: var(--yellow); }
     .summary-chip.bad .num { color: var(--red); }
     .summary-chip.loc { flex: 1; }
+    .summary-chip.fetched {
+      color: var(--muted);
+      font-size: 0.78rem;
+      cursor: help;
+    }
+    .summary-chip.fetched strong { color: var(--light); font-weight: 600; }
 
     /* ── Forecast Grid ───────────────────────────── */
     .forecast-grid {
@@ -704,27 +745,62 @@
     <div class="fav-bar" id="favBar"></div>
     <!-- Custom spot entry -->
     <div id="customSpotToggle" style="margin-top:8px;">
-      <span style="font-size:0.75rem;color:var(--teal);cursor:pointer;text-decoration:underline;" onclick="document.getElementById('customSpotForm').style.display=document.getElementById('customSpotForm').style.display==='none'?'flex':'none'">
-        + Add custom spot (enter coordinates)
+      <span style="font-size:0.75rem;color:var(--teal);cursor:pointer;text-decoration:underline;" onclick="openCustomSpotForm()">
+        + Add custom spot (pick on map)
       </span>
     </div>
-    <div id="customSpotForm" style="display:none;gap:8px;margin-top:8px;align-items:flex-end;flex-wrap:wrap;">
-      <div style="flex:1;min-width:120px;">
-        <label style="font-size:0.68rem;color:var(--muted);display:block;margin-bottom:3px;">Name</label>
-        <input type="text" id="customName" placeholder="Spot name"
-          style="width:100%;background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:0.85rem;outline:none;" />
+    <div id="customSpotForm" style="display:none;margin-top:12px;">
+      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+        <div style="flex:1;min-width:140px;">
+          <label style="font-size:0.68rem;color:var(--muted);display:block;margin-bottom:3px;">Name</label>
+          <input type="text" id="customName" placeholder="Spot name"
+            style="width:100%;background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:0.85rem;outline:none;" />
+        </div>
+        <button class="btn" onclick="addCustomSpot()" style="padding:8px 14px;font-size:0.82rem;">Add & Save</button>
+        <button class="btn" onclick="closeCustomSpotForm()"
+          style="padding:8px 14px;font-size:0.82rem;background:transparent;border:1px solid var(--border);color:var(--light);">Cancel</button>
       </div>
-      <div style="min-width:90px;">
-        <label style="font-size:0.68rem;color:var(--muted);display:block;margin-bottom:3px;">Latitude</label>
-        <input type="number" id="customLat" placeholder="28.74" step="0.0001"
-          style="width:100%;background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:0.85rem;outline:none;" />
+      <div id="customMap"></div>
+      <div class="custom-hint">
+        <span>🗺️ Click on the map to drop a pin — or drag the pin to fine-tune.</span>
       </div>
-      <div style="min-width:90px;">
-        <label style="font-size:0.68rem;color:var(--muted);display:block;margin-bottom:3px;">Longitude</label>
-        <input type="number" id="customLon" placeholder="-13.93" step="0.0001"
-          style="width:100%;background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:0.85rem;outline:none;" />
+      <div style="display:flex;gap:8px;margin-top:8px;align-items:flex-end;flex-wrap:wrap;">
+        <div style="flex:1;min-width:110px;">
+          <label style="font-size:0.68rem;color:var(--muted);display:block;margin-bottom:3px;">Latitude</label>
+          <input type="number" id="customLat" placeholder="28.74" step="0.0001" oninput="syncMapFromInputs()"
+            style="width:100%;background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:0.85rem;outline:none;" />
+        </div>
+        <div style="flex:1;min-width:110px;">
+          <label style="font-size:0.68rem;color:var(--muted);display:block;margin-bottom:3px;">Longitude</label>
+          <input type="number" id="customLon" placeholder="-13.93" step="0.0001" oninput="syncMapFromInputs()"
+            style="width:100%;background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:0.85rem;outline:none;" />
+        </div>
+        <div style="flex:1 1 100%;min-width:220px;">
+          <label style="font-size:0.68rem;color:var(--muted);display:block;margin-bottom:3px;">
+            Beach faces (required) <span style="opacity:0.7;">— the compass direction you'd look standing on the sand with your back to the land</span>
+          </label>
+          <select id="customBeachFacing"
+            style="width:100%;background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:0.85rem;outline:none;">
+            <option value="" selected disabled>— pick orientation —</option>
+            <option value="0">N — beach faces North</option>
+            <option value="22.5">NNE</option>
+            <option value="45">NE</option>
+            <option value="67.5">ENE</option>
+            <option value="90">E — beach faces East</option>
+            <option value="112.5">ESE</option>
+            <option value="135">SE</option>
+            <option value="157.5">SSE</option>
+            <option value="180">S — beach faces South</option>
+            <option value="202.5">SSW</option>
+            <option value="225">SW</option>
+            <option value="247.5">WSW</option>
+            <option value="270">W — beach faces West</option>
+            <option value="292.5">WNW</option>
+            <option value="315">NW</option>
+            <option value="337.5">NNW</option>
+          </select>
+        </div>
       </div>
-      <button class="btn" onclick="addCustomSpot()" style="padding:8px 14px;font-size:0.82rem;">Add & Save</button>
     </div>
   </div>
 
@@ -761,14 +837,22 @@
           <label>Beach Faces (orientation)</label>
           <select id="beachFacing" onchange="saveSettings()">
             <option value="any">Any / I don't know</option>
-            <option value="0">North (N) — beach faces North</option>
-            <option value="45">North-East (NE)</option>
-            <option value="90">East (E) — beach faces East</option>
-            <option value="135">South-East (SE)</option>
-            <option value="180">South (S) — beach faces South</option>
-            <option value="225">South-West (SW)</option>
-            <option value="270">West (W) — beach faces West</option>
-            <option value="315">North-West (NW)</option>
+            <option value="0">N — beach faces North</option>
+            <option value="22.5">NNE</option>
+            <option value="45">NE</option>
+            <option value="67.5">ENE</option>
+            <option value="90">E — beach faces East</option>
+            <option value="112.5">ESE</option>
+            <option value="135">SE</option>
+            <option value="157.5">SSE</option>
+            <option value="180">S — beach faces South</option>
+            <option value="202.5">SSW</option>
+            <option value="225">SW</option>
+            <option value="247.5">WSW</option>
+            <option value="270">W — beach faces West</option>
+            <option value="292.5">WNW</option>
+            <option value="315">NW</option>
+            <option value="337.5">NNW</option>
           </select>
         </div>
 
@@ -782,10 +866,10 @@
         </div>
 
         <div class="setting-item">
-          <label>Wave Model</label>
+          <label>Forecast Model (waves &amp; wind)</label>
           <select id="waveModel" onchange="saveSettings()">
-            <option value="ecmwf_wam025" selected>ECMWF WAM — higher accuracy, 15 days</option>
-            <option value="ncep_gfswave025">NCEP GFS Wave — 16 days</option>
+            <option value="ecmwf_wam025" selected>ECMWF — WAM waves + IFS wind, 15 days (matches Windy)</option>
+            <option value="ncep_gfswave025">NCEP GFS — GFS Wave + best-match wind, 16 days</option>
           </select>
         </div>
 
@@ -883,6 +967,7 @@
     <div class="summary-chip ok"><span class="num" id="countDecent">0</span>&nbsp;Decent 🟡</div>
     <div class="summary-chip" style="color:#fb923c"><span class="num" id="countMarginal">0</span>&nbsp;Marginal 🟠</div>
     <div class="summary-chip bad"><span class="num" id="countPoor">0</span>&nbsp;Poor 🔴</div>
+    <div class="summary-chip fetched" id="summaryFetched" title="Open-Meteo does not publish exact model run timestamps. Use this as a hint for how fresh your data is; click Get Forecast to refresh.&#10;&#10;Model run schedules (UTC):&#10;• ECMWF WAM: 00Z &amp; 12Z (≈6–8h delay to publish)&#10;• GFS Wave:  00Z, 06Z, 12Z, 18Z (≈4–5h delay)">⏱ Data fetched: <strong id="fetchedAt">—</strong></div>
   </div>
 
   <!-- Tide Matching Diagnostic (hidden by default, visible on errors) -->
@@ -1014,19 +1099,43 @@ function getFavorites() {
   try { return JSON.parse(localStorage.getItem(FAVORITES_KEY)) || []; } catch(e) { return []; }
 }
 
+// Snapshot the settings we save *per-spot*. Currently: beach orientation + tide datum.
+function getPerSpotSettingsSnapshot() {
+  return {
+    beachFacing: document.getElementById('beachFacing').value,
+    tideDatum:   document.getElementById('tideDatum').value,
+  };
+}
+
 function saveFavorite() {
   if (!selectedLocation) return;
   const favs = getFavorites();
-  // Avoid duplicates (same lat/lon)
-  if (favs.some(f => f.latitude === selectedLocation.latitude && f.longitude === selectedLocation.longitude)) return;
-  favs.push({
-    name:      selectedLocation.name,
-    admin1:    selectedLocation.admin1,
-    country:   selectedLocation.country,
-    latitude:  selectedLocation.latitude,
-    longitude: selectedLocation.longitude,
-  });
+  const snap = getPerSpotSettingsSnapshot();
+  // If a favorite already exists at this lat/lon, UPDATE its per-spot settings instead of bailing.
+  const existingIdx = favs.findIndex(f =>
+    f.latitude === selectedLocation.latitude && f.longitude === selectedLocation.longitude);
+  if (existingIdx >= 0) {
+    favs[existingIdx].beachFacing = snap.beachFacing;
+    favs[existingIdx].tideDatum   = snap.tideDatum;
+  } else {
+    favs.push({
+      name:        selectedLocation.name,
+      admin1:      selectedLocation.admin1,
+      country:     selectedLocation.country,
+      latitude:    selectedLocation.latitude,
+      longitude:   selectedLocation.longitude,
+      beachFacing: snap.beachFacing,
+      tideDatum:   snap.tideDatum,
+    });
+  }
   try { localStorage.setItem(FAVORITES_KEY, JSON.stringify(favs)); } catch(e) {}
+  // Give the save button quick feedback so the user knows the re-click committed the update
+  const btn = document.getElementById('saveFavBtn');
+  if (btn) {
+    const prev = btn.textContent;
+    btn.textContent = existingIdx >= 0 ? '✓ Updated' : '✓ Saved';
+    setTimeout(() => { btn.textContent = prev; }, 1500);
+  }
   renderFavorites();
 }
 
@@ -1035,6 +1144,32 @@ function removeFavorite(idx) {
   favs.splice(idx, 1);
   try { localStorage.setItem(FAVORITES_KEY, JSON.stringify(favs)); } catch(e) {}
   renderFavorites();
+}
+
+// Compass label for stored beach orientation (used in chip hints)
+function beachFacingLabel(val) {
+  const map = {
+    '0':'N', '22.5':'NNE', '45':'NE', '67.5':'ENE',
+    '90':'E', '112.5':'ESE', '135':'SE', '157.5':'SSE',
+    '180':'S', '202.5':'SSW', '225':'SW', '247.5':'WSW',
+    '270':'W', '292.5':'WNW', '315':'NW', '337.5':'NNW'
+  };
+  return map[String(val)] || '';
+}
+
+// Apply per-spot settings (orientation, tide datum) to the dropdowns when a favorite is selected.
+// Does NOT write to the global settings store — the spot owns these values; the global setting
+// persists for non-favorite searches.
+function applyPerSpotSettings(fav) {
+  if (!fav) return;
+  if (fav.beachFacing != null) {
+    const el = document.getElementById('beachFacing');
+    if (el) el.value = fav.beachFacing;
+  }
+  if (fav.tideDatum != null) {
+    const el = document.getElementById('tideDatum');
+    if (el) el.value = fav.tideDatum;
+  }
 }
 
 function selectFavorite(idx) {
@@ -1047,18 +1182,116 @@ function selectFavorite(idx) {
   document.getElementById('selectedLocText').textContent = parts + ' (' + f.latitude.toFixed(4) + '\u00B0, ' + f.longitude.toFixed(4) + '\u00B0)';
   document.getElementById('selectedLoc').classList.add('show');
   document.getElementById('fetchBtn').disabled = false;
+  applyPerSpotSettings(f);
+}
+
+// ────────────────────────────────────────────────
+//  Custom-spot map picker (Leaflet)
+// ────────────────────────────────────────────────
+let customMap = null;
+let customMarker = null;
+let _mapSyncTimer = null;
+
+function openCustomSpotForm(prefillName, centerLat, centerLon) {
+  const form = document.getElementById('customSpotForm');
+  form.style.display = 'block';
+  if (prefillName && !document.getElementById('customName').value.trim()) {
+    document.getElementById('customName').value = prefillName;
+  }
+  // Wait for Leaflet to load, then init/refresh map
+  const ready = () => {
+    if (!window.L) { setTimeout(ready, 120); return; }
+    initCustomMap();
+    // Map was hidden when created — refresh its size
+    setTimeout(() => {
+      if (customMap) customMap.invalidateSize();
+      // Center on user's current location guess if available, else keep default
+      if (centerLat != null && centerLon != null) {
+        customMap.setView([centerLat, centerLon], 9);
+      } else if (selectedLocation && selectedLocation.latitude != null) {
+        customMap.setView([selectedLocation.latitude, selectedLocation.longitude], 6);
+      }
+    }, 80);
+  };
+  ready();
+  // Scroll into view
+  setTimeout(() => form.scrollIntoView({behavior: 'smooth', block: 'nearest'}), 100);
+}
+
+function closeCustomSpotForm() {
+  document.getElementById('customSpotForm').style.display = 'none';
+  const facingEl = document.getElementById('customBeachFacing');
+  if (facingEl) facingEl.value = '';
+}
+
+function initCustomMap() {
+  if (customMap || !window.L) return;
+  customMap = L.map('customMap', { worldCopyJump: true }).setView([20, 0], 2);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors',
+    maxZoom: 18
+  }).addTo(customMap);
+  customMap.on('click', (e) => {
+    setCustomMarker(e.latlng.lat, e.latlng.lng, false);
+  });
+}
+
+function setCustomMarker(lat, lon, recenter) {
+  if (!customMap) return;
+  // Normalize longitude to [-180, 180]
+  while (lon > 180) lon -= 360;
+  while (lon < -180) lon += 360;
+  if (customMarker) {
+    customMarker.setLatLng([lat, lon]);
+  } else {
+    customMarker = L.marker([lat, lon], { draggable: true }).addTo(customMap);
+    customMarker.on('dragend', (ev) => {
+      const ll = ev.target.getLatLng();
+      setCustomMarker(ll.lat, ll.lng, false);
+    });
+  }
+  document.getElementById('customLat').value = lat.toFixed(4);
+  document.getElementById('customLon').value = lon.toFixed(4);
+  if (recenter) customMap.setView([lat, lon], Math.max(customMap.getZoom(), 9));
+}
+
+function syncMapFromInputs() {
+  // Debounce while user is typing
+  clearTimeout(_mapSyncTimer);
+  _mapSyncTimer = setTimeout(() => {
+    const lat = parseFloat(document.getElementById('customLat').value);
+    const lon = parseFloat(document.getElementById('customLon').value);
+    if (isNaN(lat) || isNaN(lon)) return;
+    if (!customMap) return;
+    setCustomMarker(lat, lon, true);
+  }, 400);
 }
 
 function addCustomSpot() {
   const name = document.getElementById('customName').value.trim();
   const lat  = parseFloat(document.getElementById('customLat').value);
   const lon  = parseFloat(document.getElementById('customLon').value);
+  const facingEl = document.getElementById('customBeachFacing');
+  const facingRaw = facingEl ? facingEl.value : '';
   if (!name) { alert('Please enter a spot name'); return; }
-  if (isNaN(lat) || isNaN(lon)) { alert('Please enter valid latitude and longitude'); return; }
+  if (isNaN(lat) || isNaN(lon)) { alert('Please click the map to set coordinates, or enter latitude and longitude manually.'); return; }
+  // Beach orientation is required — without it, wind scoring falls back to pure
+  // wind-speed (no onshore/offshore distinction), which silently inflates ratings.
+  if (facingRaw === '' || facingRaw == null) {
+    alert('Please pick the beach orientation — this is the direction the beach faces (out to the ocean).\n\nWithout it the app can\u2019t tell onshore wind from offshore, and will overrate the spot.');
+    if (facingEl) facingEl.focus();
+    return;
+  }
   const favs = getFavorites();
   if (favs.some(f => f.name === name)) { alert(name + ' already exists'); return; }
-  favs.push({ name, admin1: '', country: '', latitude: lat, longitude: lon });
+  const snap = getPerSpotSettingsSnapshot();
+  favs.push({ name, admin1: '', country: '', latitude: lat, longitude: lon,
+              beachFacing: facingRaw, tideDatum: snap.tideDatum });
   try { localStorage.setItem(FAVORITES_KEY, JSON.stringify(favs)); } catch(e) {}
+  // Reflect the spot's orientation in the sidebar dropdown so the first
+  // forecast we render uses the right value.
+  const sidebarFacing = document.getElementById('beachFacing');
+  if (sidebarFacing) sidebarFacing.value = facingRaw;
   // Also select it immediately
   selectedLocation = favs[favs.length - 1];
   const parts = [name].filter(Boolean).join(', ');
@@ -1070,7 +1303,12 @@ function addCustomSpot() {
   document.getElementById('customName').value = '';
   document.getElementById('customLat').value = '';
   document.getElementById('customLon').value = '';
+  if (facingEl) facingEl.value = '';
   document.getElementById('customSpotForm').style.display = 'none';
+  if (customMap && customMarker) {
+    customMap.removeLayer(customMarker);
+    customMarker = null;
+  }
   renderFavorites();
 }
 
@@ -1098,8 +1336,18 @@ function renderFavorites() {
   // User favorites (with remove button)
   html += favs.map((f, i) => {
     const label = f.name + (f.country ? ', ' + f.country : '');
-    return '<span class="fav-chip" onclick="selectFavorite(' + i + ')">'
-      + label
+    const compass = beachFacingLabel(f.beachFacing);
+    const hintBits = [];
+    if (compass) hintBits.push('faces ' + compass);
+    if (f.tideDatum) hintBits.push(f.tideDatum);
+    const titleAttr = hintBits.length
+      ? ' title="' + label + ' — ' + hintBits.join(', ') + '"'
+      : ' title="' + label + '"';
+    const hintHTML = compass
+      ? ' <span style="opacity:0.65;font-size:0.68rem;margin-left:2px;">🧭' + compass + '</span>'
+      : '';
+    return '<span class="fav-chip" onclick="selectFavorite(' + i + ')"' + titleAttr + '>'
+      + label + hintHTML
       + ' <span class="fav-x" onclick="event.stopPropagation();removeFavorite(' + i + ')" title="Remove">✕</span>'
       + '</span>';
   }).join('');
@@ -1218,17 +1466,36 @@ async function searchLocations(query) {
 
 function renderAutoList(results) {
   const list = document.getElementById('autoList');
-  if (!results.length) { list.innerHTML = '<div class="autocomplete-item"><span class="loc-name">No results found</span></div>'; list.classList.add('show'); return; }
-  list.innerHTML = results.map((r,i) => {
-    const parts = [r.admin1, r.country].filter(Boolean).join(', ');
-    return `<div class="autocomplete-item" onclick="selectLocation(${i})" data-idx="${i}">
-      <div class="loc-name">${r.name}</div>
-      <div class="loc-sub">${parts}</div>
-    </div>`;
-  }).join('');
+  const query = (document.getElementById('locationInput').value || '').trim();
+  let html = '';
+  if (!results.length) {
+    html += '<div class="autocomplete-item" style="cursor:default;"><span class="loc-name" style="color:var(--muted);">No matching spots found</span></div>';
+  } else {
+    html += results.map((r,i) => {
+      const parts = [r.admin1, r.country].filter(Boolean).join(', ');
+      return `<div class="autocomplete-item" onclick="selectLocation(${i})" data-idx="${i}">
+        <div class="loc-name">${r.name}</div>
+        <div class="loc-sub">${parts}</div>
+      </div>`;
+    }).join('');
+  }
+  const safeQuery = query.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const label = query
+    ? `\u2795 Add &ldquo;${safeQuery}&rdquo; as a custom spot`
+    : '\u2795 Add a custom spot';
+  html += `<div class="autocomplete-item add-custom" onclick="openCustomSpotFromQuery()">
+    <div class="loc-name">${label}</div>
+    <div class="loc-sub">Pick it on the map \u2014 great for hidden breaks and local names</div>
+  </div>`;
+  list.innerHTML = html;
   list.classList.add('show');
-  // store results
   list._results = results;
+}
+
+function openCustomSpotFromQuery() {
+  const q = (document.getElementById('locationInput').value || '').trim();
+  openCustomSpotForm(q);
+  closeAutoList();
 }
 
 function selectLocation(idx) {
@@ -1262,7 +1529,11 @@ async function fetchForecast() {
   const cond = getConditions();
 
   try {
-    const fetchPromises = [fetchMarine(lat, lon, cond.waveModel), fetchWeather(lat, lon)];
+    // Match the wind model to the wave model so the app and Windy stay comparable:
+    //   ECMWF WAM (waves) → ECMWF IFS 0.25° (wind/gusts)
+    //   NCEP GFS Wave     → Open-Meteo best_match (GFS-flavored by default)
+    const windModel = (cond.waveModel || '').startsWith('ecmwf') ? 'ecmwf_ifs025' : null;
+    const fetchPromises = [fetchMarine(lat, lon, cond.waveModel), fetchWeather(lat, lon, windModel)];
     let tidesData = null;
     if (cond.tidesKey.length > 6) {
       document.querySelector('.loading p').textContent = 'Fetching surf & tide conditions…';
@@ -1322,17 +1593,24 @@ async function fetchMarine(lat, lon, model) {
     + `&hourly=wave_height,wave_direction,wave_period,swell_wave_height,swell_wave_direction,swell_wave_period`
     + `&models=${m}`
     + `&forecast_days=${days}&timezone=auto`;
+  console.log('[Surf] marine fetch URL (model=' + m + '):', url);
   const res = await fetch(url);
   if (!res.ok) throw new Error('Marine API error ' + res.status);
   return res.json();
 }
 
-async function fetchWeather(lat, lon) {
+async function fetchWeather(lat, lon, model) {
+  // `model` forces a specific forecast model for wind/gusts. When omitted,
+  // Open-Meteo uses its `best_match` blend (usually GFS-flavored). Pass
+  // 'ecmwf_ifs025' to match Windy's default ECMWF IFS wind layer.
+  const modelParam = model ? `&models=${model}` : '';
   const url = `https://api.open-meteo.com/v1/forecast?`
     + `latitude=${lat}&longitude=${lon}`
     + `&hourly=wind_speed_10m,wind_direction_10m,wind_gusts_10m,weathercode`
     + `&daily=sunrise,sunset,precipitation_sum`
+    + modelParam
     + `&forecast_days=16&timezone=auto`;
+  console.log('[Surf] weather fetch URL (model=' + (model || 'best_match') + '):', url);
   const res = await fetch(url);
   if (!res.ok) throw new Error('Weather API error ' + res.status);
   return res.json();
@@ -2168,6 +2446,20 @@ function renderForecast(days, cond = getConditions()) {
   document.getElementById('countPoor').textContent = counts.poor;
   const locName = [selectedLocation.name, selectedLocation.admin1, selectedLocation.country].filter(Boolean).join(', ');
   document.getElementById('summaryLoc').textContent = '📍 ' + locName;
+  // Stamp the data-fetched time — "just now" with local clock time.
+  // The user asked for visibility into freshness since ECMWF/GFS values change
+  // a few times daily; Open-Meteo doesn't expose the model run init time, so
+  // the fetched-at time is the best freshness indicator we can show. The chip's
+  // tooltip explains model run schedules so the user can reason about staleness.
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  const isEcmwf = (getConditions().waveModel || '').startsWith('ecmwf');
+  const modelLabel = isEcmwf
+    ? 'ECMWF (WAM waves + IFS wind)'
+    : 'GFS Wave + best-match wind';
+  const fetchedEl = document.getElementById('fetchedAt');
+  if (fetchedEl) fetchedEl.textContent = `${hh}:${mm} (${modelLabel})`;
   document.getElementById('summaryBar').classList.add('show');
   document.getElementById('emailCard').classList.add('show');
 }
