@@ -1633,7 +1633,7 @@ async function fetchWeather(lat, lon, model) {
   const modelParam = model ? `&models=${model}` : '';
   const url = `https://api.open-meteo.com/v1/forecast?`
     + `latitude=${lat}&longitude=${lon}`
-    + `&hourly=wind_speed_10m,wind_direction_10m,wind_gusts_10m,weathercode`
+    + `&hourly=wind_speed_10m,wind_direction_10m,wind_gusts_10m,weathercode,precipitation`
     + `&daily=sunrise,sunset,precipitation_sum`
     + modelParam
     + `&forecast_days=16&timezone=auto`;
@@ -1805,11 +1805,20 @@ function renderPoorDayBox(d, cond, title, subtitle) {
       }
     }
     const windLabel = h.windDir !== null ? windDirLabel(h.windDir, cond.beachFacing) : '';
+    let rainCell;
+    if (h.rainHr === null || h.rainHr === undefined) {
+      rainCell = '<td style="opacity:0.35">—</td>';
+    } else if (h.rainHr < 0.1) {
+      rainCell = '<td style="opacity:0.55">0</td>';
+    } else {
+      const color = h.rainHr >= 3 ? 'var(--red)' : h.rainHr >= 1 ? 'var(--yellow)' : 'var(--green)';
+      rainCell = `<td style="color:${color};font-weight:600">${h.rainHr.toFixed(1)}</td>`;
+    }
     return `<tr style="opacity:0.8;">
       <td>${String(h.hour).padStart(2,'0')}:00</td>
       <td>${h.waveH !== null ? h.waveH.toFixed(1)+'m' : '—'}</td>
       <td>${h.windKn !== null ? h.windKn.toFixed(0)+'kn' : '—'} <span style="font-size:0.62rem">${windLabel}</span></td>
-      <td>${h.period !== null ? h.period.toFixed(0)+'s' : '—'}</td>
+      ${rainCell}
       ${tideCell}
       <td style="font-size:0.65rem;color:var(--muted)">${h.score}/100</td>
     </tr>`;
@@ -1829,7 +1838,7 @@ function renderPoorDayBox(d, cond, title, subtitle) {
       ${subtitle ? `<div style="font-size:0.7rem;color:var(--muted);margin-top:2px;">${subtitle}</div>` : ''}
       <div class="best-win-expand">
         <table>
-          <thead><tr><th>Hour</th><th>Wave</th><th>Wind</th><th>Period</th>${hasTideData ? '<th>Tide</th>' : ''}<th>Score</th></tr></thead>
+          <thead><tr><th>Hour</th><th>Wave</th><th>Wind</th><th>Rain<br><span style="font-weight:400;font-size:0.6rem;color:var(--muted)">mm/h</span></th>${hasTideData ? '<th>Tide</th>' : ''}<th>Score</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
         <div style="font-size:0.64rem;color:var(--muted);margin-top:5px">tap to collapse</div>
@@ -1863,11 +1872,26 @@ function renderBestWinBox(d, cond) {
 
     const windLabel = h.windDir !== null ? windDirLabel(h.windDir, cond.beachFacing) : '';
 
+    // Rain cell: color-coded like the daily rain stat
+    //   dry (< 0.1 mm/h)  → muted dash
+    //   trace (< 1 mm/h)  → green
+    //   light (< 3 mm/h)  → yellow
+    //   heavy (≥ 3 mm/h)  → red
+    let rainCell;
+    if (h.rainHr === null || h.rainHr === undefined) {
+      rainCell = '<td style="opacity:0.35">—</td>';
+    } else if (h.rainHr < 0.1) {
+      rainCell = '<td style="opacity:0.55">0</td>';
+    } else {
+      const color = h.rainHr >= 3 ? 'var(--red)' : h.rainHr >= 1 ? 'var(--yellow)' : 'var(--green)';
+      rainCell = `<td style="color:${color};font-weight:600">${h.rainHr.toFixed(1)}</td>`;
+    }
+
     return `<tr style="${rowStyle}">
       <td>${marker} ${String(h.hour).padStart(2,'0')}:00</td>
       <td>${h.waveH !== null ? h.waveH.toFixed(1)+'m' : '—'}</td>
       <td>${h.windKn !== null ? h.windKn.toFixed(0)+'kn' : '—'} <span style="font-size:0.62rem">${windLabel}</span></td>
-      <td>${h.period !== null ? h.period.toFixed(0)+'s' : '—'}</td>
+      ${rainCell}
       ${tideCell}
       <td style="font-size:0.65rem;color:var(--muted)">${h.score}/100</td>
     </tr>`;
@@ -1898,7 +1922,7 @@ function renderBestWinBox(d, cond) {
       </div>
       <div class="best-win-expand">
         <table>
-          <thead><tr><th>Hour</th><th>Wave</th><th>Wind</th><th>Period</th><th>${hasTideData ? 'Tide' : ''}</th><th>Score</th></tr></thead>
+          <thead><tr><th>Hour</th><th>Wave</th><th>Wind</th><th>Rain<br><span style="font-weight:400;font-size:0.6rem;color:var(--muted)">mm/h</span></th><th>${hasTideData ? 'Tide' : ''}</th><th>Score</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
         ${legend}
@@ -2048,6 +2072,7 @@ function _runProcessForecast(marine, weather, tidesData) {
     const windKmh = wi >= 0 ? weather.hourly.wind_speed_10m[wi]    : null;
     const windDir = wi >= 0 ? weather.hourly.wind_direction_10m[wi] : null;
     const gustKmh = wi >= 0 ? weather.hourly.wind_gusts_10m[wi]    : null;
+    const rainHr  = wi >= 0 ? (weather.hourly.precipitation?.[wi] ?? null) : null;
 
     const windKn  = windKmh !== null ? kmhToKnots(windKmh) : null;
     const gustKn  = gustKmh !== null ? kmhToKnots(gustKmh) : null;
@@ -2066,7 +2091,7 @@ function _runProcessForecast(marine, weather, tidesData) {
     const score = (waveH !== null && windKn !== null && period !== null)
       ? scoreHour(waveH, windKn, period, windDir, tideH, cond) : 0;
 
-    byDate[date].push({ hour, waveH, waveDir, period, swellH, windKn, windDir, gustKn, tideH, score });
+    byDate[date].push({ hour, waveH, waveDir, period, swellH, windKn, windDir, gustKn, rainHr, tideH, score });
   }
 
   // ── Wind history adjustment ("residual chop") ─────────────────────
@@ -2319,7 +2344,7 @@ function _runProcessForecast(marine, weather, tidesData) {
       // All hours in user's time window (for expanded view)
       allWindowHrs: afterDaylight.map(h => ({
         hour: h.hour, waveH: h.waveH, windKn: h.windKn, windDir: h.windDir,
-        tideH: h.tideH, period: h.period, score: h.score, gustKn: h.gustKn
+        tideH: h.tideH, period: h.period, rainHr: h.rainHr, score: h.score, gustKn: h.gustKn
       })),
     };
   }).filter(Boolean);
