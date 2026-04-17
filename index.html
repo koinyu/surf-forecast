@@ -22,10 +22,27 @@
       --teal-glow: rgba(14,165,233,0.2);
       --green: #10b981;
       --green-glow: rgba(16,185,129,0.2);
-      --yellow: #f59e0b;
-      --yellow-glow: rgba(245,158,11,0.2);
+      /* `--yellow` is pure lemon yellow (hue 51°), distinct from `--orange`
+         (hue 27°) so Decent and Marginal cards no longer blend together. */
+      --yellow: #facc15;
+      --yellow-glow: rgba(250,204,21,0.2);
+      --orange: #f97316;
+      --orange-glow: rgba(249,115,22,0.2);
       --red: #ef4444;
       --red-glow: rgba(239,68,68,0.2);
+      --purple: #a78bfa;
+      --purple-glow: rgba(167,139,250,0.2);
+
+      /* ── Rating palette (used by day-cards, badges, score-fill, chips) ──
+         Ordered from best (purple → green → yellow → orange → red) with
+         enough hue + luminance gap between adjacent levels to read at a
+         glance, including on a colorblind user's screen. */
+      --rating-epic:       #a78bfa;  --rating-epic-deep:     #8b5cf6;
+      --rating-great:      #34d399;  --rating-great-deep:    #10b981;
+      --rating-decent:     #facc15;  --rating-decent-deep:   #eab308;
+      --rating-marginal:   #fb923c;  --rating-marginal-deep: #ea580c;
+      --rating-poor:       #f87171;  --rating-poor-deep:     #dc2626;
+
       --text: #e2e8f0;
       --muted: #64748b;
       --light: #94a3b8;
@@ -335,9 +352,23 @@
       gap: 8px;
     }
     .summary-chip .num { font-size: 1.4rem; font-weight: 800; }
+    /* Per-rating chip colors — the text color is also tinted so the whole
+       chip, not just the number, telegraphs its rating. Kept in sync with
+       the day-card palette above. */
+    .summary-chip.epic     { color: var(--rating-epic); }
+    .summary-chip.great    { color: var(--rating-great); }
+    .summary-chip.decent   { color: var(--rating-decent); }
+    .summary-chip.marginal { color: var(--rating-marginal); }
+    .summary-chip.poor     { color: var(--rating-poor); }
+    .summary-chip.epic     .num { color: var(--rating-epic); }
+    .summary-chip.great    .num { color: var(--rating-great); }
+    .summary-chip.decent   .num { color: var(--rating-decent); }
+    .summary-chip.marginal .num { color: var(--rating-marginal); }
+    .summary-chip.poor     .num { color: var(--rating-poor); }
+    /* Legacy utility classes (still used elsewhere) — kept for back-compat */
     .summary-chip.good .num { color: var(--green); }
-    .summary-chip.ok .num { color: var(--yellow); }
-    .summary-chip.bad .num { color: var(--red); }
+    .summary-chip.ok   .num { color: var(--yellow); }
+    .summary-chip.bad  .num { color: var(--red); }
     .summary-chip.loc { flex: 1; }
     .summary-chip.fetched {
       color: var(--muted);
@@ -366,58 +397,53 @@
     }
     .day-card:hover { transform: translateY(-2px); }
 
+    /* Rating-tinted cards: every day-card gets a subtle wash in its rating's
+       hue, a stronger border, and a prominent top stripe. Thickness of the
+       stripe + saturation of the tint decrease as the rating worsens, so the
+       eye is drawn to epic/great days and poor days recede. */
     .day-card.epic {
-      border-color: rgba(99,102,241,0.5);
-      box-shadow: 0 0 0 1px rgba(99,102,241,0.3), 0 4px 24px rgba(99,102,241,0.15);
+      border-color: rgba(139,92,246,0.55);
+      background: linear-gradient(180deg, rgba(139,92,246,0.10), rgba(139,92,246,0.03) 40%, var(--card));
+      box-shadow: 0 0 0 1px rgba(139,92,246,0.28), 0 6px 28px rgba(139,92,246,0.18);
     }
     .day-card.epic::before {
-      content: '';
-      position: absolute;
-      top: 0; left: 0; right: 0;
-      height: 4px;
-      background: linear-gradient(90deg, #818cf8, #a78bfa, #818cf8);
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 5px;
+      background: linear-gradient(90deg, var(--rating-epic-deep), var(--rating-epic), var(--rating-epic-deep));
     }
     .day-card.great {
-      border-color: rgba(16,185,129,0.4);
-      box-shadow: 0 0 0 1px rgba(16,185,129,0.2), 0 4px 20px rgba(16,185,129,0.1);
+      border-color: rgba(16,185,129,0.45);
+      background: linear-gradient(180deg, rgba(16,185,129,0.08), rgba(16,185,129,0.02) 40%, var(--card));
+      box-shadow: 0 0 0 1px rgba(16,185,129,0.22), 0 4px 20px rgba(16,185,129,0.12);
     }
     .day-card.great::before {
-      content: '';
-      position: absolute;
-      top: 0; left: 0; right: 0;
-      height: 3px;
-      background: linear-gradient(90deg, var(--green), #34d399);
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+      background: linear-gradient(90deg, var(--rating-great-deep), var(--rating-great));
     }
     .day-card.decent {
-      border-color: rgba(245,158,11,0.4);
-      box-shadow: 0 0 0 1px rgba(245,158,11,0.2), 0 4px 20px rgba(245,158,11,0.08);
+      border-color: rgba(234,179,8,0.50);
+      background: linear-gradient(180deg, rgba(250,204,21,0.08), rgba(250,204,21,0.02) 40%, var(--card));
+      box-shadow: 0 0 0 1px rgba(234,179,8,0.22);
     }
     .day-card.decent::before {
-      content: '';
-      position: absolute;
-      top: 0; left: 0; right: 0;
-      height: 3px;
-      background: linear-gradient(90deg, var(--yellow), #fbbf24);
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: linear-gradient(90deg, var(--rating-decent-deep), var(--rating-decent));
     }
     .day-card.marginal {
-      border-color: rgba(251,146,60,0.3);
+      border-color: rgba(234,88,12,0.42);
+      background: linear-gradient(180deg, rgba(249,115,22,0.07), rgba(249,115,22,0.02) 40%, var(--card));
     }
     .day-card.marginal::before {
-      content: '';
-      position: absolute;
-      top: 0; left: 0; right: 0;
-      height: 3px;
-      background: linear-gradient(90deg, #fb923c, #fdba74);
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: linear-gradient(90deg, var(--rating-marginal-deep), var(--rating-marginal));
     }
     .day-card.poor {
-      border-color: rgba(239,68,68,0.25);
+      border-color: rgba(220,38,38,0.30);
+      background: linear-gradient(180deg, rgba(239,68,68,0.05), var(--card));
+      opacity: 0.88;
     }
     .day-card.poor::before {
-      content: '';
-      position: absolute;
-      top: 0; left: 0; right: 0;
-      height: 3px;
-      background: linear-gradient(90deg, var(--red), #f87171);
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, var(--rating-poor-deep), var(--rating-poor));
     }
 
     .day-header {
@@ -436,11 +462,11 @@
       letter-spacing: 0.06em;
       text-transform: uppercase;
     }
-    .badge-epic { background: rgba(99,102,241,0.15); color: #818cf8; border: 1px solid rgba(99,102,241,0.3); }
-    .badge-great { background: var(--green-glow); color: var(--green); border: 1px solid rgba(16,185,129,0.3); }
-    .badge-decent { background: var(--yellow-glow); color: var(--yellow); border: 1px solid rgba(245,158,11,0.3); }
-    .badge-marginal { background: rgba(251,146,60,0.15); color: #fb923c; border: 1px solid rgba(251,146,60,0.3); }
-    .badge-poor { background: var(--red-glow); color: var(--red); border: 1px solid rgba(239,68,68,0.3); }
+    .badge-epic     { background: rgba(139,92,246,0.18); color: var(--rating-epic);     border: 1px solid rgba(139,92,246,0.40); }
+    .badge-great    { background: rgba(16,185,129,0.18); color: var(--rating-great);    border: 1px solid rgba(16,185,129,0.40); }
+    .badge-decent   { background: rgba(250,204,21,0.16); color: var(--rating-decent);   border: 1px solid rgba(234,179,8,0.45);  }
+    .badge-marginal { background: rgba(249,115,22,0.18); color: var(--rating-marginal); border: 1px solid rgba(234,88,12,0.45);  }
+    .badge-poor     { background: rgba(239,68,68,0.18);  color: var(--rating-poor);     border: 1px solid rgba(220,38,38,0.45);  }
 
     .day-stats { display: flex; flex-direction: column; gap: 9px; }
     .stat-row { display: flex; align-items: center; justify-content: space-between; }
@@ -460,11 +486,12 @@
       border-radius: 3px;
       transition: width 0.6s ease;
     }
-    .epic .score-fill { background: linear-gradient(90deg, #818cf8, #a78bfa); }
-    .great .score-fill { background: linear-gradient(90deg, var(--green), #34d399); }
-    .decent .score-fill { background: linear-gradient(90deg, var(--yellow), #fbbf24); }
-    .marginal .score-fill { background: linear-gradient(90deg, #fb923c, #fdba74); }
-    .poor .score-fill { background: linear-gradient(90deg, #475569, #64748b); }
+    .epic     .score-fill { background: linear-gradient(90deg, var(--rating-epic-deep),     var(--rating-epic)); }
+    .great    .score-fill { background: linear-gradient(90deg, var(--rating-great-deep),    var(--rating-great)); }
+    .decent   .score-fill { background: linear-gradient(90deg, var(--rating-decent-deep),   var(--rating-decent)); }
+    .marginal .score-fill { background: linear-gradient(90deg, var(--rating-marginal-deep), var(--rating-marginal)); }
+    /* Poor uses red (was gray, which read as "disabled"). */
+    .poor     .score-fill { background: linear-gradient(90deg, var(--rating-poor-deep),     var(--rating-poor)); }
 
     .best-window {
       margin-top: 10px;
@@ -962,11 +989,11 @@
   <!-- Summary Bar -->
   <div class="summary-bar" id="summaryBar">
     <div class="summary-chip loc" id="summaryLoc">📍 —</div>
-    <div class="summary-chip" style="color:#818cf8"><span class="num" id="countEpic">0</span>&nbsp;Epic 🟣</div>
-    <div class="summary-chip good"><span class="num" id="countGreat">0</span>&nbsp;Great 🟢</div>
-    <div class="summary-chip ok"><span class="num" id="countDecent">0</span>&nbsp;Decent 🟡</div>
-    <div class="summary-chip" style="color:#fb923c"><span class="num" id="countMarginal">0</span>&nbsp;Marginal 🟠</div>
-    <div class="summary-chip bad"><span class="num" id="countPoor">0</span>&nbsp;Poor 🔴</div>
+    <div class="summary-chip epic"><span class="num" id="countEpic">0</span>&nbsp;Epic 🟣</div>
+    <div class="summary-chip great"><span class="num" id="countGreat">0</span>&nbsp;Great 🟢</div>
+    <div class="summary-chip decent"><span class="num" id="countDecent">0</span>&nbsp;Decent 🟡</div>
+    <div class="summary-chip marginal"><span class="num" id="countMarginal">0</span>&nbsp;Marginal 🟠</div>
+    <div class="summary-chip poor"><span class="num" id="countPoor">0</span>&nbsp;Poor 🔴</div>
     <div class="summary-chip fetched" id="summaryFetched" title="Open-Meteo does not publish exact model run timestamps. Use this as a hint for how fresh your data is; click Get Forecast to refresh.&#10;&#10;Model run schedules (UTC):&#10;• ECMWF WAM: 00Z &amp; 12Z (≈6–8h delay to publish)&#10;• GFS Wave:  00Z, 06Z, 12Z, 18Z (≈4–5h delay)">⏱ Data fetched: <strong id="fetchedAt">—</strong></div>
   </div>
 
