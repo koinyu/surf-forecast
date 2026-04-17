@@ -753,7 +753,6 @@
     <div class="wave-icon">🏄</div>
     <h1>Surf <span>Forecast</span></h1>
     <p>Up to 16-day wave & wind forecast — find your perfect surf day</p>
-    <p style="font-size:0.72rem;color:var(--muted);margin-top:2px;">All wave & wind data is free — no API key needed. Only tide data requires a WorldTides key.</p>
   </header>
 
   <!-- Location Search -->
@@ -895,7 +894,7 @@
         <div class="setting-item">
           <label>Forecast Model (waves &amp; wind)</label>
           <select id="waveModel" onchange="saveSettings()">
-            <option value="ecmwf_wam025" selected>ECMWF — WAM waves + IFS wind, 15 days (matches Windy)</option>
+            <option value="ecmwf_wam025" selected>ECMWF — WAM waves + IFS wind, 15 days</option>
             <option value="ncep_gfswave025">NCEP GFS — GFS Wave + best-match wind, 16 days</option>
           </select>
         </div>
@@ -952,21 +951,22 @@
               <option value="MLLW">MLLW — Mean Lower Low Water</option>
             </select>
           </div>
-          <div style="font-size:0.75rem;color:var(--muted);margin-top:6px;line-height:1.5;">
-            Free tier at <strong style="color:var(--light)">worldtides.info</strong> — enter your key above to enable tide height filtering and display on each day card.
-            Without a key, wave &amp; wind conditions are still fully scored.
-            If tide values look too low/high, try a different <strong style="color:var(--light)">datum</strong>.
+          <div style="font-size:0.72rem;color:var(--muted);margin-top:6px;">
+            If tide values look off, try a different <strong style="color:var(--light)">datum</strong>.
           </div>
         </div>
       </div>
 
       <div class="divider"></div>
-      <div style="font-size:0.8rem; color:var(--muted); line-height:1.6;">
-        🌊 <strong style="color:var(--light)">Wave data</strong> from Open-Meteo (ECMWF 15 days / GFS 16 days, free) &nbsp;|&nbsp;
-        💨 <strong style="color:var(--light)">Wind data</strong> from Open-Meteo Weather API (free) &nbsp;|&nbsp;
-        🌊 <strong style="color:var(--light)">Tide data</strong> from WorldTides API (requires free key) &nbsp;|&nbsp;
-        📊 All scores based on your time window &amp; daylight hours
-      </div>
+      <details style="font-size:0.72rem;color:var(--muted);">
+        <summary style="cursor:pointer;outline:none;list-style:none;color:var(--teal);">Data sources &amp; scoring ▾</summary>
+        <div style="margin-top:8px;line-height:1.6;">
+          🌊 <strong style="color:var(--light)">Wave data</strong> from Open-Meteo (ECMWF 15 days / GFS 16 days, free) &nbsp;|&nbsp;
+          💨 <strong style="color:var(--light)">Wind data</strong> from Open-Meteo Weather API (free) &nbsp;|&nbsp;
+          🌊 <strong style="color:var(--light)">Tide data</strong> from WorldTides API (requires free key) &nbsp;|&nbsp;
+          📊 All scores based on your time window &amp; daylight hours
+        </div>
+      </details>
     </div>
   </div>
 
