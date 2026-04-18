@@ -2345,8 +2345,13 @@ function _runProcessForecast(marine, weather, tidesData) {
     // If tide data is available but no hour is in range → score 0 (unsurfable)
     const rawDayScore = noTideWindow ? 0
       : useHrs.reduce((s,h) => s+h.score, 0) / useHrs.length;
-    const rainMm      = sun.rainMm ?? 0;
-    const dayScore    = rainMm > 10 ? Math.min(rawDayScore, 30) : rawDayScore;
+    // Rain that actually falls during the surf window (daylight ∩ user's
+    // earliest–latest hours) — NOT the 24-hour daily total. A heavy
+    // overnight downpour shouldn't penalize a dry surf window.
+    const windowRainHrs = afterDaylight.filter(h => h.rainHr !== null && h.rainHr !== undefined);
+    const windowRainMm  = windowRainHrs.reduce((s, h) => s + h.rainHr, 0);
+    const rainMm        = windowRainMm;
+    const dayScore      = rainMm > 10 ? Math.min(rawDayScore, 30) : rawDayScore;
 
     return {
       date, isToday: date === today,
