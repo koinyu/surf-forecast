@@ -2641,25 +2641,31 @@ function hoursToRanges(hours) {
 // Build [{date, surfable, good}, …] rows from the current forecastDays.
 function buildSheetRows(cond) {
   return forecastDays.map(d => {
-    // Surfable hours = tide is within user's min/max range (only when tide
-    // data is available). All other hours are dropped from this column —
-    // including ones that fall outside the user's daylight + earliest/latest.
+    // Mirror the app's own verdict: if the day has tide data but no
+    // surfable tide window, the card shows "Poor" and the sheet must
+    // match — otherwise we end up flagging hours on a day the app has
+    // already rated as unsurfable (e.g. Aoshima on a day where the tide
+    // tops out at 1.1 m and the user's minTide is 1.2 m).
+    if (d.hasTides && d.noTideWindow) {
+      return { date: fmtSheetDate(d.date), surfable: '', good: 'POOR' };
+    }
+
+    // Surfable hours = tide is within user's min/max range. Requires
+    // non-null tide data for the hour; sparse tide hours are excluded.
     const tideHrs = (d.allWindowHrs || [])
       .filter(h => h.tideH !== null && h.tideH >= cond.minTide && h.tideH <= cond.maxTide)
       .map(h => h.hour);
 
-    // Good hours = score ≥ 65 (Great rating) AND tide must also be in
-    // your range when tide data is available. The earlier "≥ 50 (Decent)"
-    // cutoff included most of the daylight on a typical day — too many
-    // hours to act on. This stricter rule only flags hours where every
-    // factor (waves, wind direction & strength, swell period, tide) actually
-    // aligns. When a day has no tide window at all the score collapses to
-    // 0, so good becomes "POOR" automatically.
+    // Good hours = score ≥ 65 (Great rating) AND tide-in-range. When the
+    // spot has tide data (hasTides) we require each hour's own tideH to
+    // be non-null and in range — a null tideH means we can't confirm, so
+    // we exclude it rather than optimistically count it. Only when the
+    // spot has no tide data at all do we fall back to a score-only rule.
     const goodHrs = (d.allWindowHrs || [])
       .filter(h => {
         if ((h.score || 0) < 65) return false;
-        if (h.tideH !== null) {
-          return h.tideH >= cond.minTide && h.tideH <= cond.maxTide;
+        if (d.hasTides) {
+          return h.tideH !== null && h.tideH >= cond.minTide && h.tideH <= cond.maxTide;
         }
         return true;
       })
