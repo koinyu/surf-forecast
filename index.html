@@ -2639,31 +2639,32 @@ function hoursToRanges(hours) {
 }
 
 // Build [{date, surfable, good}, …] rows from the current forecastDays.
+//
+// The sheet must mirror what the card actually shows — otherwise the
+// user sees a "Best window 14:00–17:00" on the app but the sheet claims
+// the day is POOR (or vice versa). So both columns derive from the same
+// quantities the renderer uses:
+//   - surfable  = every hour whose tide sits inside the user's min/max
+//                 range (or every daylight hour when the spot has no
+//                 tide data). Shown as comma-joined ranges.
+//   - good      = the card's "⭐ Best window" — the longest consecutive
+//                 surfable run that meets minSessionHrs, chosen by the
+//                 same scoring logic as the card.
+// If the day carries noTideWindow / noConsecutiveWindow (the two states
+// that make the card render "Poor"), good is "POOR" and surfable is
+// empty or whatever scattered tide hours remain.
 function buildSheetRows(cond) {
   return forecastDays.map(d => {
-    // Mirror the app's own verdict: if the day has tide data but no
-    // surfable tide window, the card shows "Poor" and the sheet must
-    // match — otherwise we end up flagging hours on a day the app has
-    // already rated as unsurfable (e.g. Aoshima on a day where the tide
-    // tops out at 1.1 m and the user's minTide is 1.2 m).
+    // Fully unsurfable: tide never enters range all day.
     if (d.hasTides && d.noTideWindow) {
       return { date: fmtSheetDate(d.date), surfable: '', good: 'POOR' };
     }
 
-    // Surfable hours = tide is within user's min/max range. Requires
-    // non-null tide data for the hour; sparse tide hours are excluded.
-    const tideHrs = (d.allWindowHrs || [])
-      .filter(h => h.tideH !== null && h.tideH >= cond.minTide && h.tideH <= cond.maxTide)
-      .map(h => h.hour);
-
-    // Good hours = score ≥ 65 (Great rating) AND tide-in-range. When the
-    // spot has tide data (hasTides) we require each hour's own tideH to
-    // be non-null and in range — a null tideH means we can't confirm, so
-    // we exclude it rather than optimistically count it. Only when the
-    // spot has no tide data at all do we fall back to a score-only rule.
-    const goodHrs = (d.allWindowHrs || [])
+    // Hours whose tide sits inside the user's range. Sparse/missing
+    // tide points (tideH === null) are excluded when the spot has tide
+    // data — we can't confirm they're usable.
+    const surfableHrs = (d.allWindowHrs || [])
       .filter(h => {
-        if ((h.score || 0) < 65) return false;
         if (d.hasTides) {
           return h.tideH !== null && h.tideH >= cond.minTide && h.tideH <= cond.maxTide;
         }
@@ -2671,8 +2672,19 @@ function buildSheetRows(cond) {
       })
       .map(h => h.hour);
 
-    const surfable = tideHrs.length ? hoursToRanges(tideHrs) : '';
-    const good     = goodHrs.length  ? hoursToRanges(goodHrs)  : 'POOR';
+    const surfable = surfableHrs.length ? hoursToRanges(surfableHrs) : '';
+
+    // "Good" = the app's Best window box. That box is what the user
+    // actually trusts on the card, so the sheet must use the same
+    // bestHour / bestEndHr rather than re-deriving from per-hour scores
+    // (which diverged on Decent days — app shows a window, sheet said
+    // POOR because no individual hour crossed score ≥ 65).
+    let good;
+    if (d.noConsecutiveWindow || d.bestHour === null || d.bestEndHr === null) {
+      good = 'POOR';
+    } else {
+      good = `${d.bestHour}:00–${d.bestEndHr}:00`;
+    }
     return { date: fmtSheetDate(d.date), surfable, good };
   });
 }
