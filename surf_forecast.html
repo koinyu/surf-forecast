@@ -1031,6 +1031,20 @@
     <div class="email-status" id="emailStatus"></div>
   </div>
 
+  <!-- Google Sheet Sync Section -->
+  <div class="email-card" id="sheetCard" style="margin-top:18px;">
+    <h3>🗓️ Sync to Google Sheet Calendar</h3>
+    <div class="email-row">
+      <input type="url" id="sheetWebAppUrl" placeholder="Apps Script Web App URL (ends in /exec)" />
+      <button class="btn-email" onclick="syncToSheet()" style="background:linear-gradient(135deg,#0ea5e9,#0369a1);box-shadow:0 4px 14px rgba(14,165,233,0.3);">🗓️ Sync to Sheet</button>
+    </div>
+    <div class="email-note">
+      ℹ️ Fills <strong>column B</strong> with the surfable tide window (hours where tide is within your Min/Max Tide range) and <strong>column C</strong> with good hours (score &ge; 50) — or <strong>POOR</strong> if the day is bad all day.<br>
+      First-time setup: open your Sheet → Extensions → Apps Script → paste the code from <strong>sheet_sync.gs</strong> in this folder, deploy as Web App (Execute as: me, Access: anyone), copy the <code>/exec</code> URL here.
+    </div>
+    <div class="email-status" id="sheetStatus"></div>
+  </div>
+
 </div>
 
 <script>
@@ -1060,6 +1074,7 @@ function saveSettings() {
     earliestHour:  document.getElementById('earliestHour').value,
     latestHour:    document.getElementById('latestHour').value,
     minSessionHrs: document.getElementById('minSessionHrs').value,
+    sheetWebAppUrl: (document.getElementById('sheetWebAppUrl') || {}).value || '',
   };
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch(e) {}
 }
@@ -1083,6 +1098,7 @@ function loadSettings() {
     setVal('earliestHour',  s.earliestHour);
     setVal('latestHour',    s.latestHour);
     setVal('minSessionHrs', s.minSessionHrs);
+    setVal('sheetWebAppUrl', s.sheetWebAppUrl);
     // Update hour labels
     const ehEl = document.getElementById('earliestHour');
     const lhEl = document.getElementById('latestHour');
@@ -1551,6 +1567,7 @@ async function fetchForecast() {
   document.getElementById('forecastGrid').innerHTML = '';
   document.getElementById('summaryBar').classList.remove('show');
   document.getElementById('emailCard').classList.remove('show');
+  document.getElementById('sheetCard').classList.remove('show');
 
   const { latitude: lat, longitude: lon } = selectedLocation;
   const cond = getConditions();
@@ -2514,6 +2531,7 @@ function renderForecast(days, cond = getConditions()) {
   if (fetchedEl) fetchedEl.textContent = `${hh}:${mm} (${modelLabel})`;
   document.getElementById('summaryBar').classList.add('show');
   document.getElementById('emailCard').classList.add('show');
+  document.getElementById('sheetCard').classList.add('show');
 }
 
 // ════════════════════════════════════════════════
@@ -2583,6 +2601,119 @@ function showEmailStatus(msg, type) {
   el.textContent = msg;
   el.className = `email-status show ${type}`;
   setTimeout(() => el.classList.remove('show'), 6000);
+}
+
+// ════════════════════════════════════════════════
+//  GOOGLE SHEET SYNC
+// ════════════════════════════════════════════════
+// Format date "YYYY-MM-DD" → "DD-MMM (Day)" matching column A in the
+// user's Spring–Summer 2026 sheet (e.g. "18-Apr (Sat)").
+// We have to match this format exactly so the Apps Script can locate
+// the row by date — the sheet stores it as a plain string, not a Date.
+function fmtSheetDate(isoDate) {
+  const dt = new Date(isoDate + 'T12:00:00');
+  const dd  = String(dt.getDate()).padStart(2, '0');
+  const mon = dt.toLocaleDateString('en-US', { month: 'short' });
+  const day = dt.toLocaleDateString('en-US', { weekday: 'short' });
+  return `${dd}-${mon} (${day})`;
+}
+
+// Collapse a sorted list of integer hours into "h:00–h:00" ranges.
+// e.g. [6,7,8,12,13] → "6:00–9:00, 12:00–14:00"
+// (end-exclusive, so a single hour 6 becomes "6:00–7:00")
+function hoursToRanges(hours) {
+  if (!hours.length) return '';
+  const sorted = [...hours].sort((a, b) => a - b);
+  const ranges = [];
+  let start = sorted[0], prev = sorted[0];
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i] === prev + 1) {
+      prev = sorted[i];
+    } else {
+      ranges.push(`${start}:00–${prev + 1}:00`);
+      start = sorted[i]; prev = sorted[i];
+    }
+  }
+  ranges.push(`${start}:00–${prev + 1}:00`);
+  return ranges.join(', ');
+}
+
+// Build [{date, surfable, good}, …] rows from the current forecastDays.
+function buildSheetRows(cond) {
+  return forecastDays.map(d => {
+    // Surfable hours = tide is within user's min/max range (only when tide
+    // data is available). All other hours are dropped from this column —
+    // including ones that fall outside the user's daylight + earliest/latest.
+    const tideHrs = (d.allWindowHrs || [])
+      .filter(h => h.tideH !== null && h.tideH >= cond.minTide && h.tideH <= cond.maxTide)
+      .map(h => h.hour);
+
+    // Good hours = score ≥ 50 (Decent rating or better). When a day has no
+    // tide window at all, the score collapses to 0 and good becomes "POOR".
+    const goodHrs = (d.allWindowHrs || [])
+      .filter(h => (h.score || 0) >= 50)
+      .map(h => h.hour);
+
+    const surfable = tideHrs.length ? hoursToRanges(tideHrs) : '';
+    const good     = goodHrs.length  ? hoursToRanges(goodHrs)  : 'POOR';
+    return { date: fmtSheetDate(d.date), surfable, good };
+  });
+}
+
+async function syncToSheet() {
+  if (!forecastDays || !forecastDays.length) {
+    showSheetStatus('Run a forecast first, then sync.', 'error');
+    return;
+  }
+  const url = (document.getElementById('sheetWebAppUrl').value || '').trim();
+  if (!url) {
+    showSheetStatus('Paste your Apps Script Web App URL (the /exec link) above first.', 'error');
+    return;
+  }
+  if (!/^https:\/\/script\.google\.com\/.+\/exec(\?.*)?$/.test(url)) {
+    showSheetStatus('That doesn\'t look like a Web App /exec URL.', 'error');
+    return;
+  }
+
+  saveSettings();
+  const cond = getConditions();
+  const rows = buildSheetRows(cond);
+
+  showSheetStatus(`📤 Sending ${rows.length} day${rows.length === 1 ? '' : 's'} to your sheet…`, 'info');
+
+  try {
+    // Apps Script web apps reject preflight CORS for application/json POSTs,
+    // so we send as text/plain — Apps Script reads e.postData.contents and
+    // we JSON.parse it on the server side.
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ rows }),
+    });
+    const text = await res.text();
+    let data;
+    try { data = JSON.parse(text); } catch(e) { data = { ok: false, error: text }; }
+
+    if (!res.ok || !data.ok) {
+      showSheetStatus(`Sheet sync failed: ${data.error || res.status}`, 'error');
+      return;
+    }
+
+    const updated = data.updated ?? 0;
+    const skipped = data.skipped ?? 0;
+    let msg = `✅ Updated ${updated} row${updated === 1 ? '' : 's'} in your sheet.`;
+    if (skipped) msg += ` ${skipped} date${skipped === 1 ? '' : 's'} not found in column A.`;
+    showSheetStatus(msg, 'success');
+  } catch(e) {
+    showSheetStatus(`Sheet sync failed: ${e.message}`, 'error');
+  }
+}
+
+function showSheetStatus(msg, type) {
+  const el = document.getElementById('sheetStatus');
+  el.textContent = msg;
+  el.className = `email-status show ${type}`;
+  setTimeout(() => el.classList.remove('show'), 8000);
 }
 
 // ════════════════════════════════════════════════
