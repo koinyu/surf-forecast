@@ -2745,17 +2745,27 @@ async function syncToSheet() {
     // Apps Script web apps reject preflight CORS for application/json POSTs,
     // so we send as text/plain — Apps Script reads e.postData.contents and
     // we JSON.parse it on the server side.
+    // Tag the payload with a schema version. The server refuses payloads
+    // whose schema it doesn't recognise — this stops stale browser tabs
+    // (running old JS that doesn't send `rating`) from silently corrupting
+    // column B of the sheet.
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ rows }),
+      body: JSON.stringify({ schema: 'surf-v2', rows }),
     });
     const text = await res.text();
     let data;
     try { data = JSON.parse(text); } catch(e) { data = { ok: false, error: text }; }
 
     if (!res.ok || !data.ok) {
-      showSheetStatus(`Sheet sync failed: ${data.error || res.status}`, 'error');
+      // Stale-tab guard: if the server says the schema is out of date,
+      // prompt a hard refresh instead of showing a cryptic error.
+      if (data && data.error && /stale|out[- ]of[- ]date|schema/i.test(data.error)) {
+        showSheetStatus('This page is running an old version. Please hard-refresh (Cmd/Ctrl+Shift+R) and try again.', 'error');
+      } else {
+        showSheetStatus(`Sheet sync failed: ${data.error || res.status}`, 'error');
+      }
       return;
     }
 
