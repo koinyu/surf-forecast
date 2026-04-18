@@ -1039,7 +1039,7 @@
       <button class="btn-email" onclick="syncToSheet()" style="background:linear-gradient(135deg,#0ea5e9,#0369a1);box-shadow:0 4px 14px rgba(14,165,233,0.3);">🗓️ Sync to Sheet</button>
     </div>
     <div class="email-note">
-      ℹ️ Fills <strong>column B</strong> with the surfable tide window (hours where tide is within your Min/Max Tide range) and <strong>column C</strong> with good hours (score &ge; 50) — or <strong>POOR</strong> if the day is bad all day.<br>
+      ℹ️ Fills <strong>column B</strong> with the surfable tide window (hours where tide is within your Min/Max Tide range) and <strong>column C</strong> with good hours (score &ge; 65 — Great rating, tide-in-range) — or <strong>POOR</strong> if the day is bad all day.<br>
       First-time setup: open your Sheet → Extensions → Apps Script → paste the code from <strong>sheet_sync.gs</strong> in this folder, deploy as Web App (Execute as: me, Access: anyone), copy the <code>/exec</code> URL here.
     </div>
     <div class="email-status" id="sheetStatus"></div>
@@ -2648,10 +2648,21 @@ function buildSheetRows(cond) {
       .filter(h => h.tideH !== null && h.tideH >= cond.minTide && h.tideH <= cond.maxTide)
       .map(h => h.hour);
 
-    // Good hours = score ≥ 50 (Decent rating or better). When a day has no
-    // tide window at all, the score collapses to 0 and good becomes "POOR".
+    // Good hours = score ≥ 65 (Great rating) AND tide must also be in
+    // your range when tide data is available. The earlier "≥ 50 (Decent)"
+    // cutoff included most of the daylight on a typical day — too many
+    // hours to act on. This stricter rule only flags hours where every
+    // factor (waves, wind direction & strength, swell period, tide) actually
+    // aligns. When a day has no tide window at all the score collapses to
+    // 0, so good becomes "POOR" automatically.
     const goodHrs = (d.allWindowHrs || [])
-      .filter(h => (h.score || 0) >= 50)
+      .filter(h => {
+        if ((h.score || 0) < 65) return false;
+        if (h.tideH !== null) {
+          return h.tideH >= cond.minTide && h.tideH <= cond.maxTide;
+        }
+        return true;
+      })
       .map(h => h.hour);
 
     const surfable = tideHrs.length ? hoursToRanges(tideHrs) : '';
