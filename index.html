@@ -2286,9 +2286,12 @@ function _runProcessForecast(marine, weather, tidesData) {
     // ── Step 4: best consecutive window ────────────────────────────────
     // useHrs may have gaps after tide filtering (e.g. 6,7,15,16).
     // Split into runs of actually-consecutive hours.
-    // Strategy: find the longest run that meets minSess; among runs of
-    // equal length, pick the one with the highest avg score.
-    // This ensures we show the full surfable block, not just a tiny peak.
+    // Strategy: within each consecutive run that's long enough to hold
+    // a session, slide a window of EXACTLY minSess hours and pick the
+    // sub-window with the highest average score. This rewards the peak
+    // session — one great two-hour slice at dawn — instead of diluting
+    // it with weaker trailing hours just because they're still surfable.
+    // Ties broken by earlier start (dawn patrol beats late morning).
     const minSess = cond.minSessionHrs || 2;
     let bestWindow = null, bestWindowScore = -1;
     let noConsecutiveWindow = false;
@@ -2306,14 +2309,18 @@ function _runProcessForecast(marine, weather, tidesData) {
       }
       if (run.length) runs.push(run);
 
-      // From each run that meets minSess, take the full run as a candidate.
-      // Then pick the candidate with the best avg score.
+      // Slide a window of exactly minSess hours across each run; pick
+      // the slice with the highest average per-hour score.
       for (const r of runs) {
         if (r.length < minSess) continue;
-        const ws = r.reduce((s,h) => s + h.score, 0) / r.length;
-        if (ws > bestWindowScore || (ws === bestWindowScore && bestWindow && r.length > bestWindow.length)) {
-          bestWindowScore = ws;
-          bestWindow = r;
+        for (let i = 0; i <= r.length - minSess; i++) {
+          const slice = r.slice(i, i + minSess);
+          const ws = slice.reduce((s, h) => s + h.score, 0) / slice.length;
+          if (ws > bestWindowScore) {
+            bestWindowScore = ws;
+            bestWindow = slice;
+          }
+          // tie → keep the earlier window (already stored)
         }
       }
 
