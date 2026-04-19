@@ -2342,8 +2342,19 @@ function _runProcessForecast(marine, weather, tidesData) {
     }
 
     // ── Step 5: day score ────────────────────────────────────────────
-    // If tide data is available but no hour is in range → score 0 (unsurfable)
+    // Rating reflects the BEST consecutive window of the day, not the
+    // daily average. This matches how a surfer actually plans: you paddle
+    // out in your best window, so the day's rating should reward the
+    // peak session, not be dragged down by afternoon hours you'd skip.
+    //
+    //   noTideWindow          → 0 (no hour has tide in range — unsurfable)
+    //   bestWindow exists     → bestWindowScore (average score across the
+    //                           best consecutive run that meets minSess)
+    //   no consecutive window → fall back to average of surfable hours,
+    //                           so isolated single-hour peaks still show
+    //                           something meaningful instead of 0.
     const rawDayScore = noTideWindow ? 0
+      : bestWindow ? bestWindowScore
       : useHrs.reduce((s,h) => s+h.score, 0) / useHrs.length;
     // Rain that actually falls during the surf window (daylight ∩ user's
     // earliest–latest hours) — NOT the 24-hour daily total. A heavy
