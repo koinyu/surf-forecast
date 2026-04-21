@@ -1599,6 +1599,12 @@ async function fetchForecast() {
     const results = await Promise.all(fetchPromises);
     const [marine, weather] = results;
     tidesData = results[2] ?? null;
+    // Remember if fetchMarine had to swap to a fallback wave model
+    // (e.g. the user picked ECMWF WAM but WAM has no coverage at this
+    // grid point — we transparently refetched with GFS Wave). Read by
+    // the "Data fetched" label so the user can see which model actually
+    // produced the numbers.
+    window._marineFallbackTo = marine && marine._fellBackTo ? marine._fellBackTo : null;
     processForecast(marine, weather, tidesData);
   } catch(e) {
     showError('Failed to fetch forecast data: ' + e.message);
@@ -1631,16 +1637,59 @@ async function fetchTides(lat, lon, apiKey, datum) {
 async function fetchMarine(lat, lon, model) {
   // ECMWF WAM = higher accuracy (15 days), GFS Wave = longer range (16 days)
   const m = model || 'ecmwf_wam025';
-  const days = m.startsWith('ecmwf') ? 15 : 16;
-  const url = `https://marine-api.open-meteo.com/v1/marine?`
+  // Forecast horizon per model (days of data returned):
+  //   ecmwf_wam025     : 15
+  //   ewam (DWD EU)    :  5 (high-res regional, Europe only)
+  //   ncep_gfswave025  : 16
+  const daysFor = (mdl) =>
+    mdl === 'ewam' ? 5 : mdl.startsWith('ecmwf') ? 15 : 16;
+  const buildUrl = (mdl) =>
+    `https://marine-api.open-meteo.com/v1/marine?`
     + `latitude=${lat}&longitude=${lon}`
     + `&hourly=wave_height,wave_direction,wave_period,swell_wave_height,swell_wave_direction,swell_wave_period`
-    + `&models=${m}`
-    + `&forecast_days=${days}&timezone=auto`;
-  console.log('[Surf] marine fetch URL (model=' + m + '):', url);
-  const res = await fetch(url);
-  if (!res.ok) throw new Error('Marine API error ' + res.status);
-  return res.json();
+    + `&models=${mdl}`
+    + `&forecast_days=${daysFor(mdl)}&timezone=auto`;
+  const isAllNull = (d) => {
+    const w = d && d.hourly && d.hourly.wave_height;
+    return Array.isArray(w) && w.length > 0 && w.every(v => v === null);
+  };
+  const tryFetch = async (mdl) => {
+    const url = buildUrl(mdl);
+    console.log('[Surf] marine fetch URL (model=' + mdl + '):', url);
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('Marine API error (' + mdl + ') ' + r.status);
+    return r.json();
+  };
+
+  // Some coastal grid points are uncovered by a given model (e.g. ECMWF
+  // WAM's 0.25° grid flags Parede/Lisbon as "land" — the endpoint
+  // returns 200 OK but every wave_height is null, which silently wipes
+  // out the forecast). When that happens, walk a fallback chain:
+  //   primary  →  EWAM (DWD European, ~5 km — proper coastal coverage,
+  //               nearest quality peer to ECMWF)
+  //            →  alternate primary (ECMWF ↔ GFS Wave)
+  // Wind data is unaffected — both IFS and best-match wind are global.
+  const primary = await tryFetch(m);
+  if (!isAllNull(primary)) return primary;
+
+  const altPrimary = m.startsWith('ecmwf') ? 'ncep_gfswave025' : 'ecmwf_wam025';
+  const chain = ['ewam', altPrimary];
+  let lastAttempted = m;
+  for (const alt of chain) {
+    console.warn('[Surf] ' + lastAttempted + ' has no coverage at ' + lat + ',' + lon + ' — trying ' + alt);
+    const next = await tryFetch(alt);
+    lastAttempted = alt;
+    if (!isAllNull(next)) {
+      next._fellBackFrom = m;
+      next._fellBackTo = alt;
+      return next;
+    }
+  }
+  // All fallbacks were also all-null — return the primary (caller will
+  // render a friendly "no wave data" state rather than throwing).
+  primary._fellBackFrom = m;
+  primary._fellBackTo = null; // couldn't find a working alternative
+  return primary;
 }
 
 async function fetchWeather(lat, lon, model) {
@@ -2546,12 +2595,17 @@ function renderForecast(days, cond = getConditions()) {
   const now = new Date();
   const hh = String(now.getHours()).padStart(2, '0');
   const mm = String(now.getMinutes()).padStart(2, '0');
-  const isEcmwf = (getConditions().waveModel || '').startsWith('ecmwf');
-  const modelLabel = isEcmwf
-    ? 'ECMWF (WAM waves + IFS wind)'
-    : 'GFS Wave + best-match wind';
+  // If fetchMarine silently fell back to an alternate model (because
+  // the requested one has no coverage at this grid point), show the
+  // actual model used, not the one the user picked.
+  const actualWave = window._marineFallbackTo || getConditions().waveModel || '';
+  const modelLabel =
+      actualWave === 'ewam'               ? 'EWAM (DWD European ~5 km) + IFS wind'
+    : actualWave.startsWith('ecmwf')       ? 'ECMWF (WAM waves + IFS wind)'
+    :                                        'GFS Wave + best-match wind';
+  const fallbackNote = window._marineFallbackTo ? ' — auto-switched (no coverage)' : '';
   const fetchedEl = document.getElementById('fetchedAt');
-  if (fetchedEl) fetchedEl.textContent = `${hh}:${mm} (${modelLabel})`;
+  if (fetchedEl) fetchedEl.textContent = `${hh}:${mm} (${modelLabel}${fallbackNote})`;
   document.getElementById('summaryBar').classList.add('show');
   document.getElementById('emailCard').classList.add('show');
   document.getElementById('sheetCard').classList.add('show');
