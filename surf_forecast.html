@@ -1664,16 +1664,24 @@ async function fetchMarine(lat, lon, model) {
   // Some coastal grid points are uncovered by a given model (e.g. ECMWF
   // WAM's 0.25° grid flags Parede/Lisbon as "land" — the endpoint
   // returns 200 OK but every wave_height is null, which silently wipes
-  // out the forecast). When that happens, walk a fallback chain:
-  //   primary  →  EWAM (DWD European, ~5 km — proper coastal coverage,
-  //               nearest quality peer to ECMWF)
-  //            →  alternate primary (ECMWF ↔ GFS Wave)
+  // out the forecast). When that happens, walk a fallback chain.
+  //
+  // For ECMWF-primary spots (most of the world) we prefer GFS Wave over
+  // EWAM as the first fallback: GFS gives 16 days vs EWAM's 5, and the
+  // longer horizon is what makes planning a trip possible. EWAM still
+  // gets a shot as a last resort because it has the tightest coastal
+  // resolution (~5 km) and catches the rare spot that GFS also misses.
+  //
+  // For GFS-primary spots (already 16d global coverage) the old chain —
+  // EWAM first, ECMWF as last resort — is unchanged.
+  //
   // Wind data is unaffected — both IFS and best-match wind are global.
   const primary = await tryFetch(m);
   if (!isAllNull(primary)) return primary;
 
-  const altPrimary = m.startsWith('ecmwf') ? 'ncep_gfswave025' : 'ecmwf_wam025';
-  const chain = ['ewam', altPrimary];
+  const chain = m.startsWith('ecmwf')
+    ? ['ncep_gfswave025', 'ewam']   // ECMWF → GFS (16d) → EWAM (5d, last resort)
+    : ['ewam', 'ecmwf_wam025'];
   let lastAttempted = m;
   for (const alt of chain) {
     console.warn('[Surf] ' + lastAttempted + ' has no coverage at ' + lat + ',' + lon + ' — trying ' + alt);
