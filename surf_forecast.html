@@ -2443,6 +2443,66 @@ function _runProcessForecast(marine, weather, tidesData) {
         tideDropsAtEnd = true;
       }
 
+      // ── Extend the anchor outward while conditions stay strong ────────
+      // The minSess slice is just the *best* minSess hours. If the hours
+      // either side are also good, the user can surf longer than minSess —
+      // and they want to see that. So we grow the window outward while
+      // adjacent hours stay at the same rating tier as the anchor (Decent
+      // anchor → ≥ 50, Great → ≥ 65, Epic → ≥ 80). Math: if every added
+      // hour ≥ T and the anchor avg ≥ T, the new average is also ≥ T, so
+      // the day's rating tier never gets dragged down by extension.
+      //
+      // Constraints on extension:
+      //   • Stay within the same consecutive (tide-in-range) run.
+      //   • Forward extension shifts bestEndHr — re-check the end-boundary
+      //     rule. Once we've committed to a boundary-OK pick, don't grow
+      //     past where the boundary tide drops out of range.
+      //   • Don't extend Marginal/Poor anchors — the user wouldn't paddle
+      //     out longer than the minimum on a marginal day anyway.
+      if (bestWindow && bestWindowScore >= 50) {
+        const containingRun = runs.find(r =>
+          bestWindow[0].hour >= r[0].hour
+          && bestWindow[bestWindow.length - 1].hour <= r[r.length - 1].hour);
+        if (containingRun) {
+          const tierThreshold =
+              bestWindowScore >= 80 ? 80
+            : bestWindowScore >= 65 ? 65
+            : 50;
+
+          let lo = containingRun.findIndex(h => h.hour === bestWindow[0].hour);
+          let hi = containingRun.findIndex(h =>
+                     h.hour === bestWindow[bestWindow.length - 1].hour);
+
+          // Backwards: bestEndHr unchanged, just check the previous hour's score.
+          while (lo > 0 && containingRun[lo - 1].score >= tierThreshold) lo--;
+
+          // Forwards: changes bestEndHr, so the boundary rule must hold.
+          while (hi < containingRun.length - 1) {
+            const next = containingRun[hi + 1];
+            if (next.score < tierThreshold) break;
+            const newEndBoundary = next.hour + 1;
+            let nextBoundaryOK = true;
+            if (hasTides) {
+              const b = dayHrMap[newEndBoundary];
+              if (b && b.tideH !== null) {
+                nextBoundaryOK = b.tideH >= cond.minTide
+                              && b.tideH <= cond.maxTide;
+              }
+            }
+            // If we already had a boundary-OK pick, don't grow into
+            // boundary-bad territory. (If we're already in the
+            // tideDropsAtEnd fallback tier, the boundary is already bad —
+            // extending won't make it worse.)
+            if (bestWindowBoundaryOK && !nextBoundaryOK) break;
+            hi++;
+          }
+
+          bestWindow = containingRun.slice(lo, hi + 1);
+          bestWindowScore = bestWindow.reduce((s, h) => s + h.score, 0)
+                          / bestWindow.length;
+        }
+      }
+
       // If no run meets minSess, flag it
       if (!bestWindow && useHrs.length > 0) {
         noConsecutiveWindow = true;
