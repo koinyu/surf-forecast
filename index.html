@@ -1980,6 +1980,17 @@ function renderBestWinBox(d, cond) {
     + (hasTideData ? ` &nbsp;|&nbsp; <span class="tide-in">green</span> tide = in range (${cond.minTide.toFixed(1)}–${cond.maxTide.toFixed(1)}m)` : '')
     + `</div>`;
 
+  // Warning chip when the tide drops out of the user's range right at the
+  // end of the recommended window — i.e. you'd be exiting the water in
+  // unsurfable tide. Only shown when no boundary-OK alternative exists.
+  const tideDropChip = d.tideDropsAtEnd
+    ? `<div style="margin-top:6px;padding:6px 10px;border-radius:8px;
+        background:rgba(249,115,22,0.12);border:1px solid rgba(249,115,22,0.35);
+        color:var(--orange);font-size:0.72rem;font-weight:600;">
+        ⚠ Tide drops below your min at ${d.bestEndHr}:00 — session ends in shallow/low tide
+      </div>`
+    : '';
+
   return `
     <div class="best-win-box" data-expandable="1">
       <div class="best-win-title">
@@ -1994,6 +2005,7 @@ function renderBestWinBox(d, cond) {
         <span>💨 ${bwd.wind.toFixed(0)}kn</span>
         ${tideAvg}
       </div>
+      ${tideDropChip}
       <div class="best-win-expand">
         <table>
           <thead><tr><th>Hour</th><th>Wave</th><th>Wind</th><th>Rain<br><span style="font-weight:400;font-size:0.6rem;color:var(--muted)">mm/h</span></th><th>${hasTideData ? 'Tide' : ''}</th><th>Score</th></tr></thead>
@@ -2349,10 +2361,28 @@ function _runProcessForecast(marine, weather, tidesData) {
     // session — one great two-hour slice at dawn — instead of diluting
     // it with weaker trailing hours just because they're still surfable.
     // Ties broken by earlier start (dawn patrol beats late morning).
+    //
+    // END-BOUNDARY rule (added 2026-04-29 from Aoshima feedback): a session
+    // displayed as "7:00 – 9:00" runs THROUGH 9:00 — you're paddling out at
+    // 7:00 and exiting at 9:00. So we need tide in range at THREE sample
+    // points (7:00, 8:00, 9:00), not just the two interior hours. Without
+    // this, the window can land right where the tide drops out of range,
+    // giving a session that ends in unsurfable water. We enforce this by
+    // requiring the hour AFTER the slice (the boundary) to also be in the
+    // tide range when tide data is available. If no slice satisfies the
+    // boundary check, we fall back to the relaxed pick with a flag so the
+    // card can warn "tide drops at end."
     const minSess = cond.minSessionHrs || 2;
     let bestWindow = null, bestWindowScore = -1;
+    let bestWindowBoundaryOK = false;
     let noConsecutiveWindow = false;
+    let tideDropsAtEnd = false;
     if (!noTideWindow && useHrs.length > 0) {
+      // Map all daylight hours by hour → so we can look up the boundary tide
+      // even when that hour was filtered out of useHrs (i.e. tide-out-of-range)
+      const dayHrMap = {};
+      afterDaylight.forEach(h => { dayHrMap[h.hour] = h; });
+
       // Build runs of consecutive hours
       const runs = [];
       let run = [useHrs[0]];
@@ -2368,17 +2398,49 @@ function _runProcessForecast(marine, weather, tidesData) {
 
       // Slide a window of exactly minSess hours across each run; pick
       // the slice with the highest average per-hour score.
+      // Two-pass selection: first prefer slices whose end boundary is
+      // also in tide range; only if NO such slice exists do we accept a
+      // boundary-violating slice (and mark `tideDropsAtEnd`).
       for (const r of runs) {
         if (r.length < minSess) continue;
         for (let i = 0; i <= r.length - minSess; i++) {
           const slice = r.slice(i, i + minSess);
+          const sliceEndHr = slice[slice.length - 1].hour;
+
+          // End-boundary check: the moment the session ends.
+          // OK if (a) no boundary data (end of day / no tide data), or
+          //      (b) boundary tide is within user range.
+          let boundaryOK = true;
+          if (hasTides) {
+            const boundary = dayHrMap[sliceEndHr + 1];
+            if (boundary && boundary.tideH !== null) {
+              boundaryOK = boundary.tideH >= cond.minTide
+                        && boundary.tideH <= cond.maxTide;
+            }
+          }
+
           const ws = slice.reduce((s, h) => s + h.score, 0) / slice.length;
-          if (ws > bestWindowScore) {
+
+          // Prefer boundary-OK slices over boundary-violating ones, even
+          // if the latter has a higher score. Within each tier, take the
+          // higher score (earlier start breaks ties since we iterate in
+          // chronological order and only update on strict ws > best).
+          if (boundaryOK && !bestWindowBoundaryOK) {
+            // First valid-boundary slice we've seen — switch tiers.
+            bestWindowBoundaryOK = true;
+            bestWindowScore = ws;
+            bestWindow = slice;
+          } else if (boundaryOK === bestWindowBoundaryOK && ws > bestWindowScore) {
             bestWindowScore = ws;
             bestWindow = slice;
           }
-          // tie → keep the earlier window (already stored)
+          // boundary-violating slice when we already have a boundary-OK
+          // pick → ignore.
         }
+      }
+
+      if (bestWindow && !bestWindowBoundaryOK) {
+        tideDropsAtEnd = true;
       }
 
       // If no run meets minSess, flag it
@@ -2433,7 +2495,7 @@ function _runProcessForecast(marine, weather, tidesData) {
       avgWave, maxWave, minWave, avgWind, avgPeriod, avgWindDir, avgSwellH,
       dayScore, rawScore: rawDayScore,
       bestHour, bestEndHr, bestWinDetails, rainMm,
-      noTideWindow, noConsecutiveWindow,
+      noTideWindow, noConsecutiveWindow, tideDropsAtEnd,
       sunrise: sun.riseStr, sunset: sun.setStr,
       riseFrac: sun.riseFrac, setFrac: sun.setFrac,
       hasTides,
@@ -2490,8 +2552,11 @@ function renderForecast(days, cond = getConditions()) {
     const badgeClass = `badge-${rating}`;
 
     const offshoreLabel = windDirLabel(d.avgWindDir, cond.beachFacing);
-    const bestTime = d.bestHour !== null
-      ? `${d.bestHour}:00 – ${d.bestHour + 4}:00`
+    // (Day card uses renderBestWinBox for the headline window — this local
+    // var is kept only because some legacy callers may still reference it
+    // and we want it to track the actual session length, not a fixed +4.)
+    const bestTime = (d.bestHour !== null && d.bestEndHr !== null)
+      ? `${d.bestHour}:00 – ${d.bestEndHr}:00`
       : '—';
     const sunriseStr = fmtHHMM(d.sunrise);
     const sunsetStr  = fmtHHMM(d.sunset);
@@ -2642,7 +2707,9 @@ function buildReportText() {
     const dt = new Date(d.date + 'T12:00:00');
     const label = dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
     const rating = d.dayScore >= 80 ? '🟣 EPIC' : d.dayScore >= 65 ? '🟢 GREAT' : d.dayScore >= 50 ? '🟡 DECENT' : d.dayScore >= 35 ? '🟠 MARGINAL' : '🔴 POOR';
-    const bestTime = d.bestHour !== null ? ` | Best: ${d.bestHour}:00–${d.bestHour+4}:00` : '';
+    const bestTime = (d.bestHour !== null && d.bestEndHr !== null)
+      ? ` | Best: ${d.bestHour}:00–${d.bestEndHr}:00${d.tideDropsAtEnd ? ' ⚠ tide drops at end' : ''}`
+      : '';
     const sunLine  = (rise !== '—' && set !== '—') ? ` | ☀️ ${rise}–${set}` : '';
     lines.push(`${label.padEnd(12)} ${rating.padEnd(12)} ${d.minWave.toFixed(1)}–${d.maxWave.toFixed(1)}m | ${d.avgWind.toFixed(0)}kn wind | ${d.avgPeriod.toFixed(0)}s period${bestTime}${sunLine}`);
   });
