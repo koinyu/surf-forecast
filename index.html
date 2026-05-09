@@ -2905,9 +2905,21 @@ function buildSheetRows(cond) {
     // Hours whose tide sits inside the user's range. Sparse/missing
     // tide points (tideH === null) are excluded when the spot has tide
     // data — we can't confirm they're usable.
+    //
+    // Mirror processForecast's per-day fallback: when the spot has tide
+    // data overall but THIS day has no tide values for any of its hours
+    // (e.g. "today" — WorldTides only returns data from the current
+    // hour forward, so an early-morning sync sees tideH=null for every
+    // daylight hour), fall through to treating all daylight hours as
+    // surfable. Without this, the day still gets a Best window from the
+    // no-tide branch of the rating engine, but the Tide column lands in
+    // the sheet empty — exactly the inconsistency users see when
+    // syncing before today's tide data is available. (See processForecast:
+    // `if (hasTides && allTideHrs.length > 0)` ... else useHrs = afterDaylight.)
+    const dayHasTideData = (d.allWindowHrs || []).some(h => h.tideH !== null);
     const surfableHrs = (d.allWindowHrs || [])
       .filter(h => {
-        if (d.hasTides) {
+        if (d.hasTides && dayHasTideData) {
           return h.tideH !== null && h.tideH >= cond.minTide && h.tideH <= cond.maxTide;
         }
         return true;
